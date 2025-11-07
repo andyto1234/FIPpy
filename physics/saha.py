@@ -141,25 +141,67 @@ def get_element_transition_params(element):
     # Transition parameters in log10(T) space
     params = {
         # Low FIP elements (< 10 eV) - transition earlier
-        'Ca': {'logT_trans': 4.25, 'width_dex': 0.3},
-        'Mg': {'logT_trans': 4.25, 'width_dex': 0.3},
-        'Fe': {'logT_trans': 4.25, 'width_dex': 0.3},
-        'Si': {'logT_trans': 4.25, 'width_dex': 0.3}, 
-        
-        # Medium FIP elements (10-13 eV)
-        # 'S':  {'logT_trans': 4.25, 'width_dex': 0.4},
-        'S':  {'logT_trans': 4.25, 'width_dex': 0.4},
-        'C':  {'logT_trans': 4.25, 'width_dex': 0.4},
-        
-        # High FIP elements (> 13 eV) - transition later
-        'O':  {'logT_trans': 4.30, 'width_dex': 0.4},  # ~2.0e4 K
-        'N':  {'logT_trans': 4.32, 'width_dex': 0.4},  # ~2.1e4 K
-        'Ar': {'logT_trans': 4.35, 'width_dex': 0.4},  # ~2.2e4 K
-        'Ne': {'logT_trans': 4.40, 'width_dex': 0.4},  # ~2.5e4 K
+        'Ca': {'logT_trans': 4.5, 'width_dex': 0.2},
+        'Mg': {'logT_trans': 4.5, 'width_dex': 0.2},
+        'Fe': {'logT_trans': 4.5, 'width_dex': 0.2},
+        'Si': {'logT_trans': 4.5, 'width_dex': 0.2}, 
+        'S':  {'logT_trans': 4.5, 'width_dex': 0.2},
+        'C':  {'logT_trans': 4.5, 'width_dex': 0.2},
+        'O':  {'logT_trans': 4.5, 'width_dex': 0.2},  # ~2.0e4 K
+        'N':  {'logT_trans': 4.5, 'width_dex': 0.2},  # ~2.1e4 K
+        'Ar': {'logT_trans': 4.5, 'width_dex': 0.2},  # ~2.2e4 K
+        'Ne': {'logT_trans': 4.5, 'width_dex': 0.2},  # ~2.5e4 K
         }
     
     # Default for unknown elements - medium FIP behavior
-    return params.get(element, {'logT_trans': 4.25, 'width_dex': 0.20})
+    return params.get(element, {'logT_trans': 4.5, 'width_dex': 0.20})
+
+def _adaptive_gaussian_smooth(y, T_gradient, base_sigma=0.1, max_sigma=0.5):
+    """Apply Gaussian smoothing only where temperature gradient is large"""
+    # Normalize temperature gradient to identify transition regions
+    T_gradient = np.abs(T_gradient)  # Use absolute value of gradient
+    gradient_threshold = np.median(T_gradient) + 2 * np.std(T_gradient)
+
+    y = np.asarray(y)
+    if y.ndim == 0 or y.size < 3:
+        return y
+    
+    # Identify regions with large gradients
+    high_gradient_mask = T_gradient > gradient_threshold
+    
+    # If no high gradient regions, return original
+    if not np.any(high_gradient_mask):
+        return y
+    
+    # Create output array (start with original values)
+    smoothed = y.copy()
+    
+    # Determine smoothing strength based on temperature gradient
+    # Higher temperature gradient -> more smoothing (captures transition regions)
+    sigma_array = base_sigma + (max_sigma - base_sigma) * (T_gradient / (gradient_threshold + 1e-12))
+    sigma_array = np.clip(sigma_array, base_sigma, max_sigma)
+    
+    # Apply smoothing only to high gradient regions
+    for i in range(len(y)):
+        if high_gradient_mask[i]:
+            sigma = sigma_array[i]
+            r = int(3 * sigma + 0.5)
+            if r < 1:
+                continue
+            
+            # Define local window
+            i_start = max(0, i - r)
+            i_end = min(len(y), i + r + 1)
+            
+            # Create kernel for this point
+            kx = np.arange(i_start - i, i_end - i)
+            kernel = np.exp(-0.5 * (kx / sigma) ** 2)
+            kernel /= kernel.sum()
+            
+            # Apply local smoothing
+            smoothed[i] = np.sum(y[i_start:i_end] * kernel)
+    
+    return smoothed
 
 def get_ionisation_fraction(element, atomic_data, n_e, T):
     """
@@ -191,6 +233,8 @@ def get_ionisation_fraction(element, atomic_data, n_e, T):
     
     _T = T.to(u.K).value
     
+    # if element == 'Ar':
+    #     element = 'O'
     # Get element-specific transition parameters
     trans_params = get_element_transition_params(element)
     logT_transition = trans_params['logT_trans']
@@ -198,78 +242,105 @@ def get_ionisation_fraction(element, atomic_data, n_e, T):
     
     # Work in log10(T) space for more physical transitions
     logT = np.log10(_T)
-    
-    # Optional: weak density dependence (higher density -> slightly lower transition T)
-    _n_e = n_e.to(u.cm**-3).value
-    density_correction = -0.05 * np.log10(np.mean(_n_e) / 1e10)  # Weak correction
-    logT_transition_corrected = logT_transition + np.clip(density_correction, -0.1, 0.1)
-    
-    # Adaptive width based on local gradients; widen where T or n_e change sharply
-    def _safe_grad(x):
-        x = np.asarray(x)
-        if x.ndim == 0 or x.size < 3:
-            return np.zeros_like(x)
-        return np.gradient(x)
-    
-    dlogT = np.abs(_safe_grad(logT))
-    dlogne = np.abs(_safe_grad(np.log10(_n_e)))
-    
-    denT = np.median(dlogT) + 1e-12
-    denNe = np.median(dlogne) + 1e-12
-    alpha, beta = 1.0, 0.5
-    width_loc = width_dex * (1 + alpha * dlogT / denT + beta * dlogne / denNe)
-    width_loc = np.clip(width_loc, width_dex, 3.0 * width_dex)
-    
-    # Calculate weights and smooth them along the coordinate
-    weights = sigmoid_weight(logT, logT_transition_corrected, width_loc)
-    
-    def _gaussian_smooth1d(y, sigma=1.0, truncate=3.0):
-        y = np.asarray(y)
-        if y.ndim == 0 or y.size < 3 or sigma <= 0:
-            return y
-        r = int(truncate * sigma + 0.5)
-        if r < 1:
-            return y
-        kx = np.arange(-r, r + 1)
-        k = np.exp(-0.5 * (kx / sigma) ** 2)
-        k /= k.sum()
-        ypad = np.pad(y, (r, r), mode='reflect')
-        return np.convolve(ypad, k, mode='valid')
-    
-    weights = _gaussian_smooth1d(weights, sigma=1.0)
-    
-    # Special handling for S and C: prefer higher value with smooth blending
-    # if element in ['S', 'C']:
-    #     # Take the maximum of Saha and CHIANTI at each point
-    #     max_fraction = np.maximum(saha_fraction, chianti_interp)
-        
-    #     # Blend smoothly between Saha and the maximum
-    #     # Use reduced weight to stay closer to Saha
-    #     reduced_weights = weights * 0.3  # Reduce CHIANTI influence
-        
-    #     def _logit_blend(f1, f2, w, eps=1e-12):
-    #         f1 = np.clip(f1, eps, 1 - eps)
-    #         f2 = np.clip(f2, eps, 1 - eps)
-    #         l1 = np.log(f1 / (1 - f1))
-    #         l2 = np.log(f2 / (1 - f2))
-    #         l  = (1 - w) * l1 + w * l2
-    #         return 1.0 / (1.0 + np.exp(-l))
-        
-    #     ion_fraction = _logit_blend(saha_fraction, max_fraction, reduced_weights)
-    # else:
-        # Standard blending for other elements
-    def _logit_blend(f1, f2, w, eps=1e-12):
-        f1 = np.clip(f1, eps, 1 - eps)
-        f2 = np.clip(f2, eps, 1 - eps)
-        l1 = np.log(f1 / (1 - f1))
-        l2 = np.log(f2 / (1 - f2))
-        l  = (1 - w) * l1 + w * l2
-        return 1.0 / (1.0 + np.exp(-l))
-    
-    ion_fraction = _logit_blend(saha_fraction, chianti_interp, weights)
-    
+    # Tanh-based smooth interpolation
+    x_norm = (logT - logT_transition) / width_dex
+    smooth_weights = 0.5 * (1 + np.tanh(x_norm))
+
+    # Blend in log-space for more physical behavior
+    # (ionization fractions often vary exponentially)
+    eps = 1e-10
+    log_saha = np.log10(saha_fraction + eps)
+    log_chianti = np.log10(chianti_interp + eps)
+    log_ion_fraction = (1 - smooth_weights) * log_saha + smooth_weights * log_chianti
+
+    ion_fraction = 10**log_ion_fraction
     ion_fraction = np.clip(ion_fraction, 0.0, 1.0)
+    
+    # Apply adaptive smoothing in transition regions
+    # Identify regions with high gradients (rapid changes)
+    if len(ion_fraction) > 2:
+        # Calculate gradient of ionization fraction
+        gradient = np.abs(np.gradient(T.to(u.K).value))
+        
+        
+        # Create adaptive smoothing kernel based on local gradient
+        
+        # Apply adaptive smoothing
+        ion_fraction = _adaptive_gaussian_smooth(ion_fraction, gradient, base_sigma=0.5, max_sigma=2.0)
+        ion_fraction = np.clip(ion_fraction, 0.0, 1.0)
+    
     return ion_fraction
+    # # Optional: weak density dependence (higher density -> slightly lower transition T)
+    # _n_e = n_e.to(u.cm**-3).value
+    # density_correction = -0.05 * np.log10(np.mean(_n_e) / 1e10)  # Weak correction
+    # logT_transition_corrected = logT_transition + np.clip(density_correction, -0.1, 0.1)
+    
+    # # Adaptive width based on local gradients; widen where T or n_e change sharply
+    # def _safe_grad(x):
+    #     x = np.asarray(x)
+    #     if x.ndim == 0 or x.size < 3:
+    #         return np.zeros_like(x)
+    #     return np.gradient(x)
+    
+    # dlogT = np.abs(_safe_grad(logT))
+    # dlogne = np.abs(_safe_grad(np.log10(_n_e)))
+    
+    # denT = np.median(dlogT) + 1e-12
+    # denNe = np.median(dlogne) + 1e-12
+    # alpha, beta = 1.0, 0.5
+    # width_loc = width_dex * (1 + alpha * dlogT / denT + beta * dlogne / denNe)
+    # width_loc = np.clip(width_loc, width_dex, 3.0 * width_dex)
+    
+    # # Calculate weights and smooth them along the coordinate
+    # weights = sigmoid_weight(logT, logT_transition, width_loc)
+    
+    # def _gaussian_smooth1d(y, sigma=1, truncate=3.0):
+    #     y = np.asarray(y)
+    #     if y.ndim == 0 or y.size < 3 or sigma <= 0:
+    #         return y
+    #     r = int(truncate * sigma + 0.5)
+    #     if r < 1:
+    #         return y
+    #     kx = np.arange(-r, r + 1)
+    #     k = np.exp(-0.5 * (kx / sigma) ** 2)
+    #     k /= k.sum()
+    #     ypad = np.pad(y, (r, r), mode='reflect')
+    #     return np.convolve(ypad, k, mode='valid')
+    
+    # weights = _gaussian_smooth1d(weights, sigma=1.0)
+    
+    # # Special handling for S and C: prefer higher value with smooth blending
+    # # if element in ['S', 'C']:
+    # #     # Take the maximum of Saha and CHIANTI at each point
+    # #     max_fraction = np.maximum(saha_fraction, chianti_interp)
+        
+    # #     # Blend smoothly between Saha and the maximum
+    # #     # Use reduced weight to stay closer to Saha
+    # #     reduced_weights = weights * 0.3  # Reduce CHIANTI influence
+        
+    # #     def _logit_blend(f1, f2, w, eps=1e-12):
+    # #         f1 = np.clip(f1, eps, 1 - eps)
+    # #         f2 = np.clip(f2, eps, 1 - eps)
+    # #         l1 = np.log(f1 / (1 - f1))
+    # #         l2 = np.log(f2 / (1 - f2))
+    # #         l  = (1 - w) * l1 + w * l2
+    # #         return 1.0 / (1.0 + np.exp(-l))
+        
+    # #     ion_fraction = _logit_blend(saha_fraction, max_fraction, reduced_weights)
+    # # else:
+    #     # Standard blending for other elements
+    # def _logit_blend(f1, f2, w, eps=1e-12):
+    #     f1 = np.clip(f1, eps, 1 - eps)
+    #     f2 = np.clip(f2, eps, 1 - eps)
+    #     l1 = np.log(f1 / (1 - f1))
+    #     l2 = np.log(f2 / (1 - f2))
+    #     l  = (1 - w) * l1 + w * l2
+    #     return 1.0 / (1.0 + np.exp(-l))
+    
+    # ion_fraction = _logit_blend(saha_fraction, chianti_interp, weights)
+    
+    # ion_fraction = np.clip(ion_fraction, 0.0, 1.0)
+    # return ion_fraction
 
 # def get_ionisation_fraction(element, atomic_data, n_e, T):
 #     """

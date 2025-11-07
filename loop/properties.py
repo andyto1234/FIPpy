@@ -6,6 +6,7 @@ from loop.magnetic_field import MagneticField
 from maths.interpolater import NumbaInterpolator
 import os
 import pydrad.parse.parse
+from scipy.interpolate import PchipInterpolator
 
 class LoopProperties:
     def __init__(self, input_file):
@@ -24,9 +25,9 @@ class LoopProperties:
         helium_abundance: n_He / n_H (≈ 0.1 for solar).
         """
         A = helium_abundance
-        rho_from_ne = const.m_p.cgs * ne * (1 + 4*A) / (1 + 2*A)
+        # rho_from_ne = const.m_p.cgs * ne * (1 + 4*A) / (1 + 2*A)
         rho_from_ni = const.m_p.cgs * ni * (1 + 4*A) / (1 + A)
-        return 0.5 * (rho_from_ne + rho_from_ni)
+        return rho_from_ni
 
     def B(self, s):
         return self.magnetic_field(s)
@@ -45,16 +46,8 @@ class LoopProperties:
             velocity_array = input_file.velocity.to(u.cm/u.s)
             # import pdb; pdb.set_trace()
             
-        elif input_file[-4:] == '.pkl':
-            with open(input_file, 'rb') as f:
-                loaded_data = pickle.load(f)
-            ne_array = loaded_data['ne'] * u.cm**-3
-            T_array = loaded_data['Te'] * u.MK
-            s_array = loaded_data['x'] * 1e5 * u.cm
-            nh_array = loaded_data['ne'] * u.cm**-3
-            h_ionisation = T_array.value * 0 
-            # pe_array = loaded_data['pe'] * u.dyne/u.cm**2
-            print('Loading from pickle file will result in errors - hydrogen density is completely wrong')
+        else:
+            print('file type not compatible ')
 
 
         # Extract necessary variables
@@ -71,15 +64,23 @@ class LoopProperties:
         velocity_array_cgs = velocity_array.to(u.cm/u.s).value
 
         # Create interpolation functions
-        ne_interp = interp1d(s_array_cgs, ne_array_cgs, kind='cubic', fill_value='extrapolate')
-        nh_interp = interp1d(s_array_cgs, nh_array_cgs, kind='cubic', fill_value='extrapolate')
-        rho_interp = interp1d(s_array_cgs, rho_array_cgs, kind='cubic', fill_value='extrapolate')
-        T_interp = interp1d(s_array_cgs, T_array_cgs, kind='cubic', fill_value='extrapolate')
-        h_ionisation_interp = interp1d(s_array_cgs, h_ionisation, kind='cubic', fill_value='extrapolate')
-        pe_interp = interp1d(s_array_cgs, pe_array_cgs, kind='cubic', fill_value='extrapolate')
-        sound_speed_interp = interp1d(s_array_cgs, sound_speed_array_cgs, kind='cubic', fill_value='extrapolate')
-        velocity_interp = interp1d(s_array_cgs, velocity_array_cgs, kind='cubic', fill_value='extrapolate')
-
+        # ne_interp = interp1d(s_array_cgs, ne_array_cgs, kind='cubic', fill_value='extrapolate')
+        # nh_interp = interp1d(s_array_cgs, nh_array_cgs, kind='cubic', fill_value='extrapolate')
+        # rho_interp = interp1d(s_array_cgs, rho_array_cgs, kind='cubic', fill_value='extrapolate')
+        # T_interp = interp1d(s_array_cgs, T_array_cgs, kind='cubic', fill_value='extrapolate')
+        # h_ionisation_interp = interp1d(s_array_cgs, h_ionisation, kind='cubic', fill_value='extrapolate')
+        # pe_interp = interp1d(s_array_cgs, pe_array_cgs, kind='cubic', fill_value='extrapolate')
+        # sound_speed_interp = interp1d(s_array_cgs, sound_speed_array_cgs, kind='cubic', fill_value='extrapolate')
+        # velocity_interp = interp1d(s_array_cgs, velocity_array_cgs, kind='cubic', fill_value='extrapolate')
+        # Use PchipInterpolator directly (not as a kind argument)
+        ne_interp = PchipInterpolator(s_array_cgs, ne_array_cgs, extrapolate=True)
+        nh_interp = PchipInterpolator(s_array_cgs, nh_array_cgs, extrapolate=True)
+        rho_interp = PchipInterpolator(s_array_cgs, rho_array_cgs, extrapolate=True)
+        T_interp = PchipInterpolator(s_array_cgs, T_array_cgs, extrapolate=True)
+        h_ionisation_interp = PchipInterpolator(s_array_cgs, h_ionisation, extrapolate=True)
+        pe_interp = PchipInterpolator(s_array_cgs, pe_array_cgs, extrapolate=True)
+        sound_speed_interp = PchipInterpolator(s_array_cgs, sound_speed_array_cgs, extrapolate=True)
+        velocity_interp = PchipInterpolator(s_array_cgs, velocity_array_cgs, extrapolate=True)
         return s_array, ne_interp, nh_interp, rho_interp, T_interp, h_ionisation_interp, pe_interp, sound_speed_interp, velocity_interp
     
     @property

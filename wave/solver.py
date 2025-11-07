@@ -63,6 +63,43 @@ class WaveAnalyzer:
             dv_A = dv_A.to(u.cm/u.s).value
         
         return solve_dvz(w_A, dv_A, c_s, L_rho, V_A) * u.cm/u.s
+    # After getting s_array_unique, densify transition region
+    def densify_transition_region(self, s_array, T_func, n_extra=200):
+        """Add extra points where temperature gradient is large"""
+        T_vals = np.array([T_func(s * u.cm).value for s in s_array])
+        dT = np.abs(np.gradient(T_vals))
+        
+        # Find transition region (high gradient)
+        transition_threshold = np.percentile(dT, 80)  # Top 10% gradients
+        transition_mask = dT > transition_threshold
+        
+        if np.any(transition_mask):
+            # Get bounds of transition region
+            trans_indices = np.where(transition_mask)[0]
+            s_min = s_array[trans_indices[0]]
+            s_max = s_array[trans_indices[-1]]
+            
+            # Add extra points where gradient is large, with buffer
+            buffer = 0.1 * (s_max - s_min)  # 10% buffer on each side
+            s_min_buffered = max(s_array[0], s_min - buffer)
+            s_max_buffered = min(s_array[-1], s_max + buffer)
+            
+            # Add points proportional to gradient magnitude
+            s_extra = []
+            for i in trans_indices:
+                if i > 0 and i < len(s_array) - 1:
+                    # Add points between this point and neighbors based on gradient
+                    n_points = max(2, int(n_extra * dT[i] / np.sum(dT[transition_mask])))
+                    s_extra.extend(np.linspace(s_array[i-1], s_array[i+1], n_points))
+            
+            # Also add uniform points in buffered region
+            s_uniform = np.linspace(s_min_buffered, s_max_buffered, n_extra // 2)
+            s_extra.extend(s_uniform)
+            
+            s_combined = np.sort(np.concatenate([s_array, s_extra]))
+            return np.unique(s_combined)
+        
+        return s_array
     # @profile
     def solve_wave_equations(self, amplitude, frequency):
         """Solve the wave equations using ODE solver."""
@@ -76,10 +113,26 @@ class WaveAnalyzer:
         # print(valid_indices)
         # import pdb; pdb.set_trace()
         s_array_unique, _ = np.unique(self.loop_properties.s_array[valid_indices], return_index=True)
+        s_array_unique = self.densify_transition_region(s_array_unique, self.loop_properties.T)
         
         s_eval = s_array_unique.to(u.cm).value
         print("Solving ODE ")
         sol = self._solve_ode(s_eval, y0, omega.value)
+        # Check if solver succeeded
+        if not sol.success:
+            print(f"⚠️ ODE solver failed: {sol.message}")
+            
+        # Check number of function evaluations (high = struggling)
+        print(f"Function evaluations: {sol.nfev}")
+        print(f"Number of steps: {sol.t.shape[0] if hasattr(sol, 't') else 'N/A'}")
+
+        # Check for near-resonances
+        velocity_vals = self.loop_properties.velocity(s_eval * u.cm).to(u.cm/u.s).value
+        V_A = np.array([self.VA(s * u.cm).to(u.cm/u.s).value for s in s_eval])
+        resonance_metric = np.abs(velocity_vals - V_A)
+        if np.any(resonance_metric < 0.1 * np.abs(V_A)):
+            print(f"⚠️ WARNING: Near Alfvén resonance detected!")
+            print(f"   Min |u - V_A| / |V_A| = {np.min(resonance_metric / np.abs(V_A)):.3e}")
         print("ODE solved")
         return sol
 
@@ -170,19 +223,7 @@ class WaveAnalyzer:
         def ode_system(s, y):
             """Define the ODE system for wave propagation."""
             
-            V_A_s, H_D_s, H_A_s, u_s, _s = self._ode_feeder(s)  # Now returns u_s
-            # u_s = 0.0  # Remove this line - now using actual velocity
-
-            # I_plus_R, I_plus_I, I_minus_R, I_minus_I = y
-            # # Denominators for wave equations
-            # denom_plus = u_s - V_A_s
-            # denom_minus = u_s + V_A_s
-
-            # # Wave equations in purely numeric form
-            # dI_plus_R_ds = ((u_s + V_A_s) * (I_plus_R / (4 * H_D_s) + I_minus_R / (2 * H_A_s)) + omega * I_plus_I) / denom_plus
-            # dI_plus_I_ds = ((u_s + V_A_s) * (I_plus_I / (4 * H_D_s) + I_minus_I / (2 * H_A_s)) - omega * I_plus_R) / denom_plus
-            # dI_minus_R_ds = ((u_s - V_A_s) * (I_minus_R / (4 * H_D_s) + I_plus_R / (2 * H_A_s)) + omega * I_minus_I) / denom_minus
-            # dI_minus_I_ds = ((u_s - V_A_s) * (I_minus_I / (4 * H_D_s) + I_plus_I / (2 * H_A_s)) - omega * I_minus_R) / denom_minus
+            V_A_s, H_D_s, H_A_s, u_s, _s = self._ode_feeder(s)  # Now returns u_s to use actual background flow
 
             return ode_system_numba(s, y, V_A_s, H_D_s, H_A_s, u_s, omega)
         
@@ -190,10 +231,12 @@ class WaveAnalyzer:
             ode_system,
             [s_eval[0], s_eval[-1]],
             y0,
-            t_eval=s_eval,
-            method='Radau',
-            atol=1e-6,
-            rtol=1e-6
+            dense_output=True,  # Add this
+            method='LSODA',
+            atol=1e-5,
+            rtol=1e-5,
+            max_step=np.inf  # Let it choose steps freely
+
         )    # Define ODE system
     def _ode_feeder(self, s):
         # Convert input s to astropy quantity for safety
@@ -216,23 +259,7 @@ def ode_system_numba(s, y, V_A_s, H_D_s, H_A_s, u_s, omega):
     dI_minus_I_ds = ((u_s - V_A_s) * (I_minus_I / (4.0 * H_D_s) + I_plus_I / (2.0 * H_A_s)) - omega * I_minus_R) / (u_s + V_A_s)
     
     return np.array([dI_plus_R_ds, dI_plus_I_ds, dI_minus_R_ds, dI_minus_I_ds])
-    # def _ode_system(self, s, y, omega):
-    #     """Define the ODE system for wave propagation."""
-    #     I_plus_R, I_plus_I, I_minus_R, I_minus_I = y
-    #     V_A_s, H_D_s, H_A_s, _s = self._ode_feeder(s)
-    #     u_s = 0.0  # Background flow speed
 
-    #     # Denominators for wave equations
-    #     denom_plus = u_s - V_A_s
-    #     denom_minus = u_s + V_A_s
-
-    #     # Wave equations in purely numeric form
-    #     dI_plus_R_ds = ((u_s + V_A_s) * (I_plus_R / (4 * H_D_s) + I_minus_R / (2 * H_A_s)) + omega * I_plus_I) / denom_plus
-    #     dI_plus_I_ds = ((u_s + V_A_s) * (I_plus_I / (4 * H_D_s) + I_minus_I / (2 * H_A_s)) - omega * I_plus_R) / denom_plus
-    #     dI_minus_R_ds = ((u_s - V_A_s) * (I_minus_R / (4 * H_D_s) + I_plus_R / (2 * H_A_s)) + omega * I_minus_I) / denom_minus
-    #     dI_minus_I_ds = ((u_s - V_A_s) * (I_minus_I / (4 * H_D_s) + I_plus_I / (2 * H_A_s)) - omega * I_minus_R) / denom_minus
-
-    #     return [dI_plus_R_ds, dI_plus_I_ds, dI_minus_R_ds, dI_minus_I_ds]
 
 def solve_wave_equations_from_apex(self, amplitude, frequency):
     """

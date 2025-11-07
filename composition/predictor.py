@@ -17,7 +17,7 @@ class FIPBiasCalculator:
         # self.slow_mode_velocity = slow_mode_velocity.to(u.cm/u.s) # [cm/s]
         # self.wave = WaveSolutionExtractor.(loop_properties, frequency, amplitude)
 
-    def _integral_terms(self):
+    def _integral_terms(self, return_all=False):
         ionisation_fraction = self.collision_components.ionisation_fraction
         v_s = self.collision_components.v_s # element specific turbulent speed
         v_ion = self.collision_components.v_ion
@@ -29,19 +29,18 @@ class FIPBiasCalculator:
 
         # v_st in [cm²/s²]
         # v_st encompasses the thermal speed, turbulent speed and slow mode velocity
-        v_st_squared = self.slow_mode_velocity**2 + v_s**2 + (k_B * self.loop_properties.T(self.coordinates).value /
-                        (self.collision_components.mass_number * amu))        # v_st = v_s**2 
-        # v_st_squared = self.slow_mode_velocity**2+(k_B * self.loop_properties.T(self.coordinates).value /
-        #                 (self.collision_components.mass_number * amu))        # v_st = v_s**2 # removed v_s**2
-        # v_st = (k_B * self.loop_properties.T(self.coordinates).value /
-        #                 (self.collision_components.mass_number * amu))        # v_st = v_s**2
+        thermal_speed_squared = k_B * self.loop_properties.T(self.coordinates).value / (self.collision_components.mass_number * amu)
+        v_st_squared = self.slow_mode_velocity**2 + v_s**2 + thermal_speed_squared
         integral = ionisation_fraction * acceleration.value * v_eff / (v_st_squared * v_ion)
 
-        return integral
+        if return_all:
+            return integral, ionisation_fraction, v_s, v_ion, v_eff, acceleration, thermal_speed_squared
+        else:
+            return integral
     
-    def calculate_fip_bias(self, z0, z1, direction='forward'):
+    def calculate_fip_bias(self, z0, z1, direction='forward', adaptive=True, tol=1e-6, max_refinements=5):
         """
-        Calculate FIP bias ratio between heights z0 [cm] and z1 [cm]
+        Calculate FIP bias ratio between heights z0 [cm] and z1 [cm] with adaptive grid refinement
         
         Parameters:
         -----------
@@ -52,6 +51,12 @@ class FIPBiasCalculator:
         direction : str
             'forward' for left-to-right integration
             'reverse' for right-to-left integration
+        adaptive : bool
+            Whether to use adaptive grid refinement
+        tol : float
+            Tolerance for adaptive refinement
+        max_refinements : int
+            Maximum number of refinement levels
         """
         # Convert inputs to Quantity if they aren't already
         z0 = u.Quantity(z0, u.cm)
@@ -59,64 +64,146 @@ class FIPBiasCalculator:
 
         # Get integrand terms
         integrand = self._integral_terms()
-        # print(integrand)
+        
         # Find indices corresponding to z0 and z1
         idx0 = np.argmin(np.abs(self.coordinates.value - z0.value))
         idx1 = np.argmin(np.abs(self.coordinates.value - z1.value))
         
-        # If the indices are the same, return 1.0 (no FIP bias between same points)
-        # if idx0 == idx1:
-        #     return 1.0
-            
-        # For reverse direction, we need to:
-        # # 1. Negate the integrand (since we're integrating backwards)
-        # # 2. Keep the same ordering logic for the integration
-        # if direction == 'reverse':
-        #     integrand = -integrand
-        
-        # # Ensure proper integration order
-        # if idx1 < idx0:
-        #     idx0, idx1 = idx1, idx0  # swap them
-            
-        # # Include the endpoint in the integration
-        # integral_result = simpson(y=integrand[idx0:idx1+1], 
-        #                         x=self.coordinates[idx0:idx1+1])
-        
-        # # Calculate final result
-        # fip_bias = np.exp(2 * integral_result)
-        
-        # return fip_bias
-        # Always integrate in the direction of increasing coordinate index
-        # The physics is captured by the sign of the integrand and the integration limits
         if idx0 == idx1:
             return 1.0
-        # print(direction)
-        # import pdb; pdb.set_trace()
-        # Always integrate from z0 to z1, but handle the direction properly
+            
+        # Ensure proper ordering
         if idx1 < idx0:
-            # We're integrating backwards along the coordinate array
-            # Swap indices and negate the integral
-            integral_result = -simpson(y=integrand[idx1:idx0+1], 
-                                    x=self.coordinates[idx1:idx0+1])
-        else:
-            # We're integrating forwards along the coordinate array
+            idx0, idx1 = idx1, idx0
+            
+        if not adaptive:
+            # Use simple Simpson's rule
             integral_result = simpson(y=integrand[idx0:idx1+1], 
                                     x=self.coordinates[idx0:idx1+1])
+        else:
+            # Use adaptive integration
+            integral_result = self._adaptive_integrate(
+                integrand, self.coordinates, idx0, idx1, tol, max_refinements
+            )
+        
+        # Handle direction for backwards integration
+        if direction == 'reverse' and z1.value < z0.value:
+            integral_result = -integral_result
+            
         # Calculate final result
         fip_bias = np.exp(2 * integral_result)
-        # fip_bias = np.exp(integral_result)
         return fip_bias
+    
+    def _adaptive_integrate(self, integrand, coordinates, idx0, idx1, tol, max_refinements):
+        """
+        Perform adaptive integration using recursive grid refinement
+        """
+        def integrate_segment(y_vals, x_vals, level=0):
+            """Recursively integrate a segment with adaptive refinement"""
+            if len(y_vals) < 3:
+                # Not enough points for Simpson's rule, use trapezoidal
+                return np.trapz(y_vals, x_vals)
+                
+            # Calculate integral with current grid
+            integral_coarse = simpson(y_vals, x=x_vals)
+            
+            if level >= max_refinements:
+                return integral_coarse
+                
+            # Refine grid by interpolating midpoints
+            x_refined = []
+            y_refined = []
+            
+            for i in range(len(x_vals)):
+                x_refined.append(x_vals[i])
+                y_refined.append(y_vals[i])
+                
+                if i < len(x_vals) - 1:
+                    # Add midpoint
+                    x_mid = (x_vals[i] + x_vals[i+1]) / 2
+                    # Interpolate integrand at midpoint
+                    y_mid = (y_vals[i] + y_vals[i+1]) / 2
+                    x_refined.append(x_mid)
+                    y_refined.append(y_mid)
+            
+            x_refined = np.array(x_refined)
+            y_refined = np.array(y_refined)
+            
+            # Calculate integral with refined grid
+            integral_fine = simpson(y_refined, x=x_refined)
+            
+            # Check convergence
+            error = abs(integral_fine - integral_coarse)
+            relative_error = error / (abs(integral_fine) + 1e-15)
+            
+            if relative_error < tol:
+                return integral_fine
+            else:
+                # Need further refinement - split into segments
+                mid_idx = len(x_vals) // 2
+                
+                # Left segment
+                left_integral = integrate_segment(
+                    y_vals[:mid_idx+1], x_vals[:mid_idx+1], level+1
+                )
+                
+                # Right segment  
+                right_integral = integrate_segment(
+                    y_vals[mid_idx:], x_vals[mid_idx:], level+1
+                )
+                
+                return left_integral + right_integral
         
+        # Extract the segment to integrate
+        y_segment = integrand[idx0:idx1+1]
+        x_segment = coordinates[idx0:idx1+1].value
+        
+        return integrate_segment(y_segment, x_segment)
+        
+    # def calculate_height_profile(self):
+    #     """Calculate FIP bias ratio from base to each height."""
+    #     # Initialize with ones as a regular numpy array (dimensionless)
+    #     fip_bias_profile = np.ones(len(self.coordinates))
+    #     z_base = self.coordinates[0]
+        
+    #     # Calculate FIP bias from base to each height, starting from second point
+    #     for i, z in enumerate(self.coordinates[1:], start=1):
+    #         # print(z_base, z)
+    #         fip_bias_profile[i] = self.calculate_fip_bias(z_base, z)
+    #     # Save the height profile to a pickle file
+    #     output_dir = '/Users/andysh.to/Script/Python_Script/alfven_loop/test_data/output/'
+    #     import os
+    #     import pickle
+    #     os.makedirs(output_dir, exist_ok=True)
+        
+    #     profile_data = {
+    #         'coordinates_Mm': self.coordinates,
+    #         'fip_bias_profile': fip_bias_profile
+    #     }
+        
+    #     output_file = os.path.join(output_dir, 'fip_bias_height_profile.pkl')
+    #     with open(output_file, 'wb') as f:
+    #         pickle.dump(profile_data, f)
+    #     return fip_bias_profile
+
     def calculate_height_profile(self):
-        """Calculate FIP bias ratio from base to each height."""
-        # Initialize with ones as a regular numpy array (dimensionless)
-        fip_bias_profile = np.ones(len(self.coordinates))
-        z_base = self.coordinates[0]
+        """Calculate FIP bias ratio from base to each height using cumulative integration."""
+        # Get the integrand for all points at once (already vectorized)
+        integrand = self._integral_terms()
         
-        # Calculate FIP bias from base to each height, starting from second point
-        for i, z in enumerate(self.coordinates[1:], start=1):
-            # print(z_base, z)
-            fip_bias_profile[i] = self.calculate_fip_bias(z_base, z)
+        # Use cumulative trapezoidal integration (much faster than repeated Simpson's rule)
+        from scipy.integrate import cumulative_trapezoid
+        
+        # Cumulative integral from base to each height
+        cumulative_integral = cumulative_trapezoid(
+            y=integrand, 
+            x=self.coordinates.value, 
+            initial=0.0
+        )
+        
+        # Calculate FIP bias profile: exp(2 * integral)
+        fip_bias_profile = np.exp(2 * cumulative_integral)
+        
         # Save the height profile to a pickle file
         output_dir = '/Users/andysh.to/Script/Python_Script/alfven_loop/test_data/output/'
         import os

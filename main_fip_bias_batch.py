@@ -50,7 +50,7 @@ def extract_directory_name(directory_path):
 
 def setup_output_directory(output_dir, frequency, amplitude):
     directory_name = extract_directory_name(output_dir)
-    output_dir = '/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/' + f'{directory_name}/' + f'v_{frequency.value:.3f}_A_{amplitude.value:.2f}/'
+    output_dir = '/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/' + f'{directory_name}/' + f'v_{frequency.value:.4f}_A_{amplitude.value:.2f}/'
     image_dir = output_dir + 'images/'
     for directory in [output_dir, image_dir]:
         os.makedirs(directory, exist_ok=True)
@@ -73,15 +73,134 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
     wave_components = extractor.process_solution()
     I_plus = wave_components.I_plus
     I_minus = wave_components.I_minus
-    s_values = wave_components.s_array
     flux_right = wave_components.flux_right
     flux_left = wave_components.flux_left
 
     # import pdb; pdb.set_trace()
+    s_values = wave_components.s_array
+    
+    # Find peaks of ponderomotive acceleration in first and second half
+    accel_abs = np.abs(wave_components.ponderomotive_acceleration.value)
+    mid_idx = len(s_values) // 2
+    
+    # Find peak indices in each half
+    peak_idx_first = np.argmax(accel_abs[:mid_idx])
+    peak_idx_second = mid_idx + np.argmax(accel_abs[mid_idx:])
+    
+    # Define interpolation window size
+    WINDOW_SIZE = 3
+    NUM_INTERP_POINTS = 20
+    
+    def create_interpolation_range(peak_idx, s_values, window_size):
+        """Create interpolation range around a peak index."""
+        start_idx = max(0, peak_idx - window_size)
+        end_idx = min(len(s_values) - 1, peak_idx + window_size)
+        s_range = s_values[start_idx:end_idx + 1]
+        # Create denser spacing around the peak
+        peak_s = s_values[peak_idx].value
+        s_start = s_range[0].value
+        s_end = s_range[-1].value
+        
+        # Split range into two parts: before and after peak
+        # Use more points closer to the peak
+        n_before = NUM_INTERP_POINTS // 2
+        n_after = NUM_INTERP_POINTS - n_before
+        
+        # Create non-uniform spacing with higher density near peak
+        # Using quadratic spacing for smoother transition
+        t_before = np.linspace(0, 1, n_before)**2
+        t_after = np.linspace(0, 1, n_after)**2
+        
+        s_before = s_start + t_before * (peak_s - s_start)
+        s_after = peak_s + t_after * (s_end - peak_s)
+        
+        s_interp = np.concatenate([s_before, s_after[1:]]) * s_range.unit
+        return start_idx, end_idx, s_interp
+    
+    # Process first peak
+    start_idx_first, end_idx_first, s_interp_first = create_interpolation_range(
+        peak_idx_first, s_values, WINDOW_SIZE
+    )
+    
+    # Process second peak
+    start_idx_second, end_idx_second, s_interp_second = create_interpolation_range(
+        peak_idx_second, s_values, WINDOW_SIZE
+    )
+    
+    # Create interpolation functions for I_plus and I_minus
+    from scipy.interpolate import interp1d
+    
+    def interpolate_complex_quantity(quantity, s_values, s_interp):
+        """Interpolate a complex quantity at new positions."""
+        real_interp = interp1d(s_values.value, quantity.real.value, kind='cubic')
+        imag_interp = interp1d(s_values.value, quantity.imag.value, kind='cubic')
+        return (real_interp(s_interp.value) + 1j * imag_interp(s_interp.value)) * quantity.unit
+    
+    # Interpolate at first peak
+    I_plus_interp_first = interpolate_complex_quantity(I_plus, s_values, s_interp_first)
+    I_minus_interp_first = interpolate_complex_quantity(I_minus, s_values, s_interp_first)
+    
+    # Interpolate at second peak
+    I_plus_interp_second = interpolate_complex_quantity(I_plus, s_values, s_interp_second)
+    I_minus_interp_second = interpolate_complex_quantity(I_minus, s_values, s_interp_second)
+    
+    # Reconstruct arrays with interpolated points
+    # Order: [before first peak] + [first peak interpolated] + [between peaks] + 
+    #        [second peak interpolated] + [after second peak]
+    s_values = np.concatenate([
+        s_values[:start_idx_first],
+        s_interp_first,
+        s_values[end_idx_first + 1:start_idx_second],
+        s_interp_second,
+        s_values[end_idx_second + 1:]
+    ])
+    
+    I_plus = np.concatenate([
+        I_plus[:start_idx_first],
+        I_plus_interp_first,
+        I_plus[end_idx_first + 1:start_idx_second],
+        I_plus_interp_second,
+        I_plus[end_idx_second + 1:]
+    ])
+    
+    I_minus = np.concatenate([
+        I_minus[:start_idx_first],
+        I_minus_interp_first,
+        I_minus[end_idx_first + 1:start_idx_second],
+        I_minus_interp_second,
+        I_minus[end_idx_second + 1:]
+    ])
+    
+    # Interpolate ponderomotive acceleration at both peaks
+    ponderomotive_accel_interp_first = interp1d(
+        wave_components.s_array.value, 
+        wave_components.ponderomotive_acceleration.value, 
+        kind='cubic'
+    )(s_interp_first.value) * wave_components.ponderomotive_acceleration.unit
+    
+    ponderomotive_accel_interp_second = interp1d(
+        wave_components.s_array.value, 
+        wave_components.ponderomotive_acceleration.value, 
+        kind='cubic'
+    )(s_interp_second.value) * wave_components.ponderomotive_acceleration.unit
+    
+    wave_components.ponderomotive_acceleration = np.concatenate([
+        wave_components.ponderomotive_acceleration[:start_idx_first],
+        ponderomotive_accel_interp_first,
+        wave_components.ponderomotive_acceleration[end_idx_first + 1:start_idx_second],
+        ponderomotive_accel_interp_second,
+        wave_components.ponderomotive_acceleration[end_idx_second + 1:]
+    ])
+    # Add this line to sync s_array with s_values:
+
+    wave_components.s_array = s_values
+    # Recalculate derived quantities with new grid
+    delta_B_over_sqrt_4pi_rho = (I_plus - I_minus) / 2
+    delta_v = (I_plus + I_minus) / 2
+    
     delta_B_over_sqrt_4pi_rho = (I_plus - I_minus) / 2
     delta_v = (I_plus + I_minus) / 2
 
-    # s_values = sol.t * u.cm
     rho_s = loop_properties.rho(s_values)
     VA_s = analyzer.VA(s_values)
     B_s = analyzer.B(s_values)
@@ -89,24 +208,36 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
 
     # Initialize collision calculator to get collision freqencies
     # Initialize collision calculator and calculate FIP bias for multiple elements
-    elements = ['Ca', 'Si', 'Fe', 'S', 'O', 'Ar', 'Mg', 'C']
+    elements = ['Ca', 'Mg', 'Fe', 'Si', 'S', 'C', 'O', 'Ar', 'Ne']
+    # elements = ['Ca', 'Mg', 'Fe', 'Si', 'S', 'C', 'O', 'Ar', 'Ne']
     fip_bias_heights = {}
     ionization_fractions = {}
     collision_frequencies = {}
-    
+    integral_terms = {}
+    collision_components_dict = {}
+    thermal_speed_squared_dict = {}
     for element in elements:
         collision_calculator = CollisionCalculator(loop_properties, element)
-        collision_components = collision_calculator.calculate_collision_components(wave_components.s_array)
+        collision_components = collision_calculator.calculate_collision_components(s_values)
         
         # Store ionization fractions and collision components for this element
         ionization_fractions[element] = collision_components.ionisation_fraction
+        # print(collision_components.ionisation_fraction)
         collision_frequencies[element] = collision_components
-
+        collision_components_dict[element] = collision_components
         fip_bias_calculator = FIPBiasCalculator(loop_properties,
                                               wave_components.ponderomotive_acceleration, 
                                               collision_components, 
-                                              wave_components.s_array,
+                                              s_values,
                                               slow_mode_results)
+        # fip_bias_calculator = FIPBiasCalculator(loop_properties,
+        #                                       wave_components.ponderomotive_acceleration, 
+        #                                       collision_components, 
+        #                                       wave_components.s_array,
+        #                                       slow_mode_results)
+        integrand, ionisation_fraction, v_s, v_ion, v_eff, acceleration, thermal_speed_squared  = fip_bias_calculator._integral_terms(return_all=True)
+        integral_terms[element] = integrand
+        thermal_speed_squared_dict[element] = thermal_speed_squared
         # Define the loop apex (assuming it's at 6 Mm)
         apex_height = loop_properties.s_array[-1].to(u.cm)
         
@@ -125,33 +256,60 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
         right_idx = np.argmin(np.abs(s_array_km - right_start_height.to(u.km)))
         left_idx = np.argmin(np.abs(s_array_km - right_end_height.to(u.km)))
 
-        # Calculate FIP bias for both sides
+
+        # Calculate FIP bias for both sides using cumulative integration
         fip_bias_left = []
         fip_bias_right = []
-        
+
         # Left side (forward integration)
         left_heights = wave_components.s_array[start_idx:end_idx+1]
-        for height in left_heights:
-            bias = fip_bias_calculator.calculate_fip_bias(
-                left_start_height, 
-                height.to(u.cm), 
-                direction='forward'
-            )
-            fip_bias_left.append(bias)
+        if len(left_heights) > 0:
+            # Get integrand for the left region
+            idx_start_in_full = start_idx
+            idx_end_in_full = end_idx
             
-        # Right side (reverse integration)
-        right_heights = wave_components.s_array[left_idx:right_idx+1]  # Note: changed order to ascending
-        for height in right_heights:
-            bias = fip_bias_calculator.calculate_fip_bias(
-                right_start_height, 
-                height.to(u.cm), 
-                direction='reverse'
+            # Extract integrand for this region (already computed at line 235)
+            integrand_segment = integrand[idx_start_in_full:idx_end_in_full+1]
+            coords_segment = s_values[idx_start_in_full:idx_end_in_full+1]
+            
+            # Cumulative integration from left_start_height
+            from scipy.integrate import cumulative_trapezoid
+            cumulative_integral_left = cumulative_trapezoid(
+                y=integrand_segment, 
+                x=coords_segment.value, 
+                initial=0.0
             )
-            fip_bias_right.append(bias)
-
+            fip_bias_left = np.exp(2 * cumulative_integral_left)
+        else:
+            fip_bias_left = np.array([])
+            
+        # Right side (reverse integration from apex)
+        right_heights = wave_components.s_array[left_idx:right_idx+1]
+        if len(right_heights) > 0:
+            # Extract integrand for the right region
+            idx_start_in_full = left_idx
+            idx_end_in_full = right_idx
+            
+            integrand_segment_right = integrand[idx_start_in_full:idx_end_in_full+1]
+            coords_segment_right = s_values[idx_start_in_full:idx_end_in_full+1].value
+            
+            # For reverse integration, integrate backwards and negate
+            # Reverse the arrays
+            integrand_reversed = integrand_segment_right[::-1]
+            coords_reversed = coords_segment_right[::-1]
+            
+            # Cumulative integration from right_start_height (apex) going backwards
+            cumulative_integral_right = cumulative_trapezoid(
+                y=-integrand_reversed,  # Negate for reverse direction
+                x=coords_reversed,
+                initial=0.0
+            )
+            fip_bias_right = np.exp(-2 * cumulative_integral_right[::-1])  # Reverse back to original order
+        else:
+            fip_bias_right = np.array([])
         # Calculate and plot height profile using FIPBiasCalculator
-        fip_bias_profile = fip_bias_calculator.calculate_height_profile()
-        fip_bias_plot = fip_bias_calculator.plot_profile(save=True, inverse=True)
+        # fip_bias_profile = fip_bias_calculator.calculate_height_profile()
+        # fip_bias_plot = fip_bias_calculator.plot_profile(save=True, inverse=True)
         # output_dir = '/Users/andysh.to/Script/Python_Script/alfven_loop_SM/test_data/output/'
 
         # Save the plot to the output directory
@@ -178,7 +336,7 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
     
     # Plot fractionation vs height on first subplot with different colors for each element
-    colors = {'Ca': 'blue', 'Si': 'red', 'Fe': 'orange', 'S': 'green', 'O': 'purple', 'Ar': 'gray', 'Mg': 'pink', 'C': 'brown'}
+    colors = {'Ca': 'blue', 'Mg': 'red', 'Fe': 'orange', 'Si': 'green', 'S': 'purple', 'C': 'gray', 'O': 'pink', 'Ar': 'brown', 'Ne': 'black'}
     for element in elements:
         # Plot left side
         ax1.plot(fip_bias_heights[element]['left']['heights'], 
@@ -513,8 +671,8 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
     # fip_bias_profile = fip_bias_calculator.calculate_height_profile()
     # fip_bias_plot = fip_bias_calculator.plot_profile(save=True, filepath='test_data/output/fip_bias_profile.png')
     # Process results
-    I_plus_R, I_plus_I, I_minus_R, I_minus_I = sol.y
-    I_plus = I_plus_R * u.cm/u.s + 1j * I_plus_I * u.cm/u.s
+    # I_plus_R, I_plus_I, I_minus_R, I_minus_I = sol.y
+    # I_plus = I_plus_R * u.cm/u.s + 1j * I_plus_I * u.cm/u.s
 
     # Print debug information
     # print("\nDebug Information:")
@@ -618,10 +776,13 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
         # Plasma parameters
         'VA_s': VA_s,
         'ne': loop_properties.ne(s_values),
+        'nh': loop_properties.nh(s_values),
+        'h_ionisation': loop_properties.h_ionisation(s_values),
         'T': loop_properties.T(s_values),
+        'thermal_speed_squared': thermal_speed_squared_dict,
         'B': B_s,
         'rho': rho_s,
-        
+        'collision_components_dict': collision_components_dict, 
         # Slow mode results
         'slow_mode_velocity': slow_mode_results,
         # 'slow_mode_density_perturbation': slow_mode_results['density_perturbation'],
@@ -635,7 +796,7 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
         
         # Collision frequencies for each element (if available)
         'collision_frequencies': collision_frequencies,
-        
+        'integral_terms': integral_terms,
         # Wave parameters
         'frequency': frequency,
         'amplitude': amplitude,
@@ -902,12 +1063,18 @@ if __name__ == "__main__":
     output_dir = '/'.join(input_file.split('/')[:-1]) + '/fip-bias-output'
     
     # Define frequencies and amplitudes
-    frequencies = [0.065,0.066,0.064,0.067] * u.s**-1 # resonance frequency for starting VAL-C
-
+    # frequencies = [0.07,0.071,0.072,0.073,0.074,0.075] * u.s**-1 # resonance frequency for starting VAL-C
+    # amplitudes = [0.27] * u.km/u.s  
+    # strand_nums = [700]
     # frequencies = np.linspace(0.01, 1.0, 50) * u.s**-1
+    frequencies = [0.069] * u.s**-1 # resonance frequency for starting VAL-C
+    amplitudes = [0.27] * u.km/u.s  
+    strand_nums = [700]
+    if frequencies == [0.065] * u.s**-1 or frequencies == [0.039] * u.s**-1:
+        strand_nums = [0]
+    # elif frequencies == [0.067] * u.s**-1:
+    #     strand_nums = [700]
 
-    amplitudes = [0.21] * u.km/u.s  
-    
     # Define wrapper function
     def process_strand_safe(strand_num):
         try:
@@ -926,7 +1093,7 @@ if __name__ == "__main__":
     results = Parallel(n_jobs=n_jobs, backend='loky', verbose=10)(
         delayed(process_strand_safe)(strand_num)
         # for strand_num in range(0, 100)
-        for strand_num in [25, 30]
+        for strand_num in strand_nums
     )
     
     # Check for failures
