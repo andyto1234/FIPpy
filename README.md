@@ -25,8 +25,6 @@ Large or machine-local research products are intentionally excluded:
 
 - HYDRAD simulation output folders.
 - Generated `results/`, figures, and pickle files.
-- The author working notebook, `main_chianti.ipynb`, which contains the full
-  paper-plot workflow and local paths.
 - Local CHIANTI database files and derived ion-fraction tables.
 
 You will need to provide your own HYDRAD output directory. The code expects it
