@@ -5,7 +5,7 @@ FIPpy is a research code for calculating solar First Ionisation Potential
 solves the Alfven wave transport problem, estimates the ponderomotive
 acceleration, and post-processes elemental fractionation along the loop.
 
-This repository contains the bare source code used for the paper
+This repository contains the source code used for the paper
 [**"Chromospheric dynamics and turbulence regulate the solar FIP effect"**](https://ui.adsabs.harvard.edu/abs/2026arXiv260413174T/abstract)
 by Andy S. H. To, J. Martin Laming, Jeffrey Reep, and Adam J. Finley.
 
@@ -48,7 +48,8 @@ Large or machine-local research products are intentionally excluded:
 
 - HYDRAD simulation output folders.
 - Generated `results/`, figures, and pickle files.
-- Local CHIANTI database files and derived ion-fraction tables.
+- The CHIANTI-derived ionisation table `chianti/ion_fraction_with_T_CHIANTI_v10.npz`
+  (see **Required Inputs**). CHIANTI database installations are also not bundled.
 
 You will need to provide your own HYDRAD output directory. The code expects it
 to be readable by `pydrad`.
@@ -76,14 +77,28 @@ At minimum, you need:
 - `STRAND_NUM`: strand index to read from that HYDRAD output.
 - Wave parameters such as frequency and amplitude.
 
-Optional CHIANTI ionisation data can be provided at:
+Optional but recommended CHIANTI v10 ionisation-equilibrium data should be
+placed at:
 
 ```text
-chianti/ion_fraction_with_T.npz
+chianti/ion_fraction_with_T_CHIANTI_v10.npz
 ```
 
-If that file is not present, `physics/saha.py` falls back to Saha-only
-ionisation fractions.
+The file is not distributed with this repository (see `.gitignore`). Build it
+from the CHIANTI v10 `ioneq` data for the elements you need (for example with
+the CHIANTI IDL or Python interfaces), then save a NumPy archive with:
+
+- `temperature`: 1D array of temperature in kelvin (ascending)
+- one array per element named `{SYMBOL}_ioneq` (for example `Fe_ioneq`, `O_ioneq`)
+  with ionisation fractions on the same temperature grid
+
+If you already have an older table `ion_fraction_with_T.npz` in the same
+format, copy or rename it to `ion_fraction_with_T_CHIANTI_v10.npz` in the
+`chianti/` directory. The loader resolves this path from the repository root,
+so the run location does not matter.
+
+If the file is missing, `physics/saha.py` falls back to Saha-only ionisation
+fractions.
 
 ## Basic Usage
 
@@ -131,6 +146,7 @@ See `tutorial_hydrad_output.ipynb` for plotting examples.
 
 ```text
 composition/        FIP-bias and fractionation calculations
+chianti/            (optional) `ion_fraction_with_T_CHIANTI_v10.npz`; see README
 loop/               HYDRAD reader, loop atmosphere, magnetic-field helpers
 maths/              Numerical interpolation helpers
 physics/            Ionisation, collision, speed, and frequency utilities

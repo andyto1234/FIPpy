@@ -25,7 +25,7 @@
 # #     saha_fraction = 1 / (1 + 1 / np.array(saha_fraction))
     
 # #     try:
-# #         chianti_data = np.load('chianti/ion_fraction_with_T.npz')
+# #         chianti_data = np.load('chianti/ion_fraction_with_T_CHIANTI_v10.npz')
 # #     except FileNotFoundError:
 # #         print('CHIANTI data not found, using Saha equation only - which will be wrong')
 # #         return saha_fraction
@@ -65,7 +65,7 @@
 #     saha_fraction = np.clip(saha_fraction, 0.0, 1.0)
     
 #     try:
-#         chianti_data = np.load('chianti/ion_fraction_with_T.npz')
+#         chianti_data = np.load('chianti/ion_fraction_with_T_CHIANTI_v10.npz')
 #         chianti_fraction = chianti_data[f'{element}_ioneq']
 #         chianti_temps = chianti_data['temperature']
 #         chianti_interp = np.interp(T.to(u.K).value, chianti_temps, chianti_fraction)
@@ -124,9 +124,17 @@
 #     return ion_fraction
 
 
+from pathlib import Path
+
 from plasmapy.formulary.ionization import Saha
 import numpy as np
 from astropy import units as u
+
+_CHIANTI_ION_FRACTION_NPZ = (
+    Path(__file__).resolve().parent.parent
+    / "chianti"
+    / "ion_fraction_with_T_CHIANTI_v10.npz"
+)
 
 def sigmoid_weight(x, x0, width):
     """Calculate sigmoid weights for smooth transition"""
@@ -221,14 +229,17 @@ def get_ionisation_fraction(element, atomic_data, n_e, T):
     saha_fraction = np.clip(saha_fraction, 0.0, 1.0)
     
     try:
-        chianti_data = np.load('chianti/ion_fraction_with_T.npz')
+        chianti_data = np.load(_CHIANTI_ION_FRACTION_NPZ)
         chianti_fraction = chianti_data[f'{element}_ioneq']
         chianti_temps = chianti_data['temperature']
         chianti_interp = np.interp(T.to(u.K).value, chianti_temps, chianti_fraction)
         chianti_interp = np.clip(chianti_interp, 0.0, 1.0)
         
     except FileNotFoundError:
-        print(f'CHIANTI data not found for {element}, using Saha equation only')
+        print(
+            f'CHIANTI file not found ({_CHIANTI_ION_FRACTION_NPZ.name}), '
+            f'using Saha equation only for {element}'
+        )
         return saha_fraction
     
     _T = T.to(u.K).value
@@ -363,7 +374,7 @@ def get_ionisation_fraction_debug(element, atomic_data, n_e, T):
     saha_fraction = np.clip(saha_fraction, 0.0, 1.0)
     
     try:
-        chianti_data = np.load('chianti/ion_fraction_with_T.npz')
+        chianti_data = np.load(_CHIANTI_ION_FRACTION_NPZ)
         chianti_fraction = chianti_data[f'{element}_ioneq']
         chianti_temps = chianti_data['temperature']
         chianti_interp = np.interp(T.to(u.K).value, chianti_temps, chianti_fraction)
