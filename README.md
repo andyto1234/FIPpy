@@ -6,8 +6,8 @@ solves the Alfven wave transport problem, estimates the ponderomotive
 acceleration, and post-processes elemental fractionation along the loop.
 
 This repository contains the bare source code used for the paper
-**"Chromospheric dynamics and turbulence regulate the solar FIP effect"** by
-Andy S. H. To, J. Martin Laming, Jeffrey Reep, and Adam J. Finley.
+[**"Chromospheric dynamics and turbulence regulate the solar FIP effect"**](https://ui.adsabs.harvard.edu/abs/2026arXiv260413174T/abstract)
+by Andy S. H. To, J. Martin Laming, Jeffrey Reep, and Adam J. Finley.
 
 ## What Is Included
 
