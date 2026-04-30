@@ -1,4 +1,4 @@
-# FIPpy / Wave2FIP
+# FIPpy
 
 FIPpy is a research code for calculating solar First Ionisation Potential
 (FIP) bias from HYDRAD loop atmospheres. It reads HYDRAD strand output,
