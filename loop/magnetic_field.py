@@ -34,7 +34,7 @@ class MagneticField:
                             105.9))
                             # 7.9))
 
-        return B_s/3 * u.G # artificially decrease the magnetic field strength
+        return B_s * u.G # artificially decrease the magnetic field strength
 
     def pressure_scaled(self, s, B_fp=100*u.G, B_min=10*u.G, alpha=0.1,
                     tr_boost=0.0, tr_sharpness=2.0, tr_threshold=0.0):

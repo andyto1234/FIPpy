@@ -5,24 +5,105 @@ import io
 import astropy.units as u
 
 class FIPBiasCalculator:
-    def __init__(self, loop_properties, acceleration, collision_components, coordinates, slow_mode_velocity = None):
+    def __init__(self, loop_properties, acceleration, collision_components, coordinates, 
+                 slow_mode_velocity=None, acoustic_flux=None, v_add=None):
         self.loop_properties = loop_properties
-        self.acceleration = acceleration.to(u.cm/u.s**2) # [cm/s^2]
+        self.acceleration = acceleration.to(u.cm/u.s**2)
         self.collision_components = collision_components
-        self.coordinates = coordinates.to(u.cm) # [cm]
+        self.coordinates = coordinates.to(u.cm)
+        
+        # Store acoustic flux for use in calculations
+        if acoustic_flux is not None:
+            self.acoustic_flux = acoustic_flux
+        else:
+            self.acoustic_flux = 1e8 * u.erg / u.cm**2 / u.s  # default value
+
+        # Store additional turbulence term v_add for To et al. 2025b test
+        if v_add is not None:
+            self.v_add = v_add.to(u.cm/u.s).value  # Convert to cm/s as scalar
+        else:
+            self.v_add = 0.0  # Default to zero (no additional turbulence)
+
         if slow_mode_velocity is not None:
-            self.slow_mode_velocity = slow_mode_velocity.to(u.cm/u.s).value # [cm/s]
+            self.slow_mode_velocity = slow_mode_velocity.to(u.cm/u.s).value
         else:
             self.slow_mode_velocity = None
-        # self.slow_mode_velocity = slow_mode_velocity.to(u.cm/u.s) # [cm/s]
-        # self.wave = WaveSolutionExtractor.(loop_properties, frequency, amplitude)
 
+    def _acoustic_rms_from_flux(
+        self,
+        flux=1e8 * u.erg / u.cm**2 / u.s,                             # e.g. 1e7 * u.erg / u.cm**2 / u.s
+        base_mach=0.1,                         # v(z0) = base_mach * c_s(z0) if flux is None
+        damping_length=None,                   # e.g. 2e8 * u.cm or None
+        z0=None,                               # launch height; if None, use lowest grid point
+        max_mach=1.0,                          # cap v_rms <= max_mach * c_s
+    ):
+        """
+        Return v_rms(z) [cm/s] for upward acoustic waves.
+
+        If `flux` is given, we use it directly as the mechanical flux F_ac.
+        Otherwise, we infer F_ac from a base Mach number at height z0:
+            F = rho(z0) * (base_mach * c_s(z0))^2 * c_s(z0).
+
+        WKB: v_rms^2 = F(z) / [rho(z) * c_s(z)],
+        with optional exponential damping: F(z) = F0 * exp(-(z - z0)/L_damp).
+        """
+
+        # Coordinates and background profiles
+        z = self.coordinates.to(u.cm).value                      # cm
+        rho = self.loop_properties.rho(self.coordinates).to(
+            u.g / u.cm**3
+        ).value                                                  # g / cm^3
+        cs = self.loop_properties.sound_speed(self.coordinates).to(
+            u.cm / u.s
+        ).value                                                  # cm / s
+
+        # Choose launch height index
+        if z0 is None:
+            z0_val = z[0]
+            i0 = 0
+        else:
+            z0_val = z0.to(u.cm).value
+            i0 = np.argmin(np.abs(z - z0_val))                   # nearest grid point
+
+        # Determine acoustic flux F0 [erg / cm^2 / s]
+        if flux is None:
+            # Infer flux from base Mach number at z0: v0 = M * c_s
+            v0 = base_mach * cs[i0]                              # cm / s
+            F0 = rho[i0] * v0**2 * cs[i0]                        # erg / cm^2 / s
+        else:
+            F0 = flux.to(u.erg / u.cm**2 / u.s).value            # erg / cm^2 / s
+
+        # Build F(z) profile with optional damping
+        if damping_length is None:
+            Fz = F0 * np.ones_like(z)
+        else:
+            Ld = u.Quantity(damping_length, u.cm).to(u.cm).value
+            Fz = F0 * np.exp(-(z - z0_val) / Ld)
+
+        # Avoid zeros / negatives
+        Fz = np.clip(Fz, 0.0, None)
+        rho_eff = np.clip(rho, 1e-99, None)                      # avoid division by 0
+
+        # WKB amplitude: v_rms^2 = F(z) / (rho * c_s)
+        v2 = Fz / (rho_eff * cs)                                 # cm^2 / s^2
+        v2 = np.clip(v2, 0.0, None)
+        v_rms = np.sqrt(v2)                                      # cm / s
+
+        # Cap v_rms to keep things semi-linear
+        v_rms_cap = max_mach * cs
+        over = v_rms > v_rms_cap
+        v_rms[over] = v_rms_cap[over]
+
+        return v_rms  # [cm/s], numpy array
+        
     def _integral_terms(self, return_all=False):
         ionisation_fraction = self.collision_components.ionisation_fraction
         v_s = self.collision_components.v_s # element specific turbulent speed
         v_ion = self.collision_components.v_ion
         v_eff = self.collision_components.v_eff
         acceleration = self.acceleration
+        # sound_speed = self.loop_properties.sound_speed(self.coordinates).to(u.cm/u.s).value/10 # [cm/s]
+        acoustic_rms = self._acoustic_rms_from_flux(flux=self.acoustic_flux)
         # Constants
         k_B = 1.3807e-16  # Boltzmann constant [erg/K]
         amu = 1.66e-24    # atomic mass unit [g]
@@ -30,11 +111,12 @@ class FIPBiasCalculator:
         # v_st in [cm²/s²]
         # v_st encompasses the thermal speed, turbulent speed and slow mode velocity
         thermal_speed_squared = k_B * self.loop_properties.T(self.coordinates).value / (self.collision_components.mass_number * amu)
-        v_st_squared = self.slow_mode_velocity**2 + v_s**2 + thermal_speed_squared
+        v_st_squared = self.slow_mode_velocity**2 + v_s**2 + thermal_speed_squared + acoustic_rms**2 + self.v_add**2
+        
         integral = ionisation_fraction * acceleration.value * v_eff / (v_st_squared * v_ion)
 
         if return_all:
-            return integral, ionisation_fraction, v_s, v_ion, v_eff, acceleration, thermal_speed_squared
+            return integral, ionisation_fraction, v_s, v_ion, v_eff, acceleration, thermal_speed_squared, acoustic_rms
         else:
             return integral
     

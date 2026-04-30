@@ -48,18 +48,27 @@ def extract_directory_name(directory_path):
     name = directory_path.split('/')[-1]
     return name
 
-def setup_output_directory(output_dir, frequency, amplitude):
+def setup_output_directory(output_dir, frequency, amplitude, flux_value=None, v_add=None):
     directory_name = extract_directory_name(output_dir)
-    output_dir = '/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/' + f'{directory_name}/' + f'v_{frequency.value:.4f}_A_{amplitude.value:.2f}/'
+    
+    # Include flux in directory name if provided
+    if flux_value is not None:
+        flux_str = f'F_{flux_value.value:.1e}'.replace('+', '')
+        output_dir = f'/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/{directory_name}/v_{frequency.value:.4f}_A_{amplitude.value:.2f}_{flux_str}/'
+    elif v_add is not None:
+        v_add_str = f'v_add_{v_add.value:.2f}'.replace('+', '')
+        output_dir = f'/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/{directory_name}/v_{frequency.value:.4f}_A_{amplitude.value:.2f}_{v_add_str}/'
+    else:
+        output_dir = f'/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/{directory_name}/v_{frequency.value:.4f}_A_{amplitude.value:.2f}/'
+    
     image_dir = output_dir + 'images/'
     for directory in [output_dir, image_dir]:
         os.makedirs(directory, exist_ok=True)
-    # os.makedirs(output_dir, exist_ok=True)
     return output_dir, image_dir
-
-def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num=105):
+    
+def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num=105, acoustic_flux=None, v_add=None):
     # Load data from input pickle file
-    output_dir, image_dir = setup_output_directory(output_dir, frequency, amplitude)
+    output_dir, image_dir = setup_output_directory(output_dir, frequency, amplitude, flux_value=acoustic_flux, v_add=v_add)
 
     hydrad_strand = HydradReader(input_file, strand_num=strand_num).read_strand()
     # print(type(hydrad_strand))
@@ -208,7 +217,7 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
 
     # Initialize collision calculator to get collision freqencies
     # Initialize collision calculator and calculate FIP bias for multiple elements
-    elements = ['Ca', 'Mg', 'Fe', 'Si', 'S', 'C', 'O', 'Ar', 'Ne']
+    elements = ['Ca', 'Mg', 'Fe', 'Si', 'S', 'C', 'N', 'O', 'Ne', 'Ar']
     # elements = ['Ca', 'Mg', 'Fe', 'Si', 'S', 'C', 'O', 'Ar', 'Ne']
     fip_bias_heights = {}
     ionization_fractions = {}
@@ -216,6 +225,7 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
     integral_terms = {}
     collision_components_dict = {}
     thermal_speed_squared_dict = {}
+    sound_speed_dict = {}
     for element in elements:
         collision_calculator = CollisionCalculator(loop_properties, element)
         collision_components = collision_calculator.calculate_collision_components(s_values)
@@ -225,19 +235,24 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
         # print(collision_components.ionisation_fraction)
         collision_frequencies[element] = collision_components
         collision_components_dict[element] = collision_components
-        fip_bias_calculator = FIPBiasCalculator(loop_properties,
-                                              wave_components.ponderomotive_acceleration, 
-                                              collision_components, 
-                                              s_values,
-                                              slow_mode_results)
+        fip_bias_calculator = FIPBiasCalculator(
+            loop_properties,
+            wave_components.ponderomotive_acceleration, 
+            collision_components, 
+            s_values,
+            slow_mode_results,
+            acoustic_flux=acoustic_flux,
+            v_add=v_add # artificial value to test FIP bias
+        )
         # fip_bias_calculator = FIPBiasCalculator(loop_properties,
         #                                       wave_components.ponderomotive_acceleration, 
         #                                       collision_components, 
         #                                       wave_components.s_array,
         #                                       slow_mode_results)
-        integrand, ionisation_fraction, v_s, v_ion, v_eff, acceleration, thermal_speed_squared  = fip_bias_calculator._integral_terms(return_all=True)
+        integrand, ionisation_fraction, v_s, v_ion, v_eff, acceleration, thermal_speed_squared, sound_speed  = fip_bias_calculator._integral_terms(return_all=True)
         integral_terms[element] = integrand
         thermal_speed_squared_dict[element] = thermal_speed_squared
+        sound_speed_dict[element] = sound_speed
         # Define the loop apex (assuming it's at 6 Mm)
         apex_height = loop_properties.s_array[-1].to(u.cm)
         
@@ -336,7 +351,7 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
     
     # Plot fractionation vs height on first subplot with different colors for each element
-    colors = {'Ca': 'blue', 'Mg': 'red', 'Fe': 'orange', 'Si': 'green', 'S': 'purple', 'C': 'gray', 'O': 'pink', 'Ar': 'brown', 'Ne': 'black'}
+    colors = {'Ca': 'blue', 'Mg': 'red', 'Fe': 'orange', 'Si': 'green', 'S': 'purple', 'C': 'gray', 'O': 'pink', 'Ar': 'brown', 'Ne': 'black', 'N': 'cyan'}
     for element in elements:
         # Plot left side
         ax1.plot(fip_bias_heights[element]['left']['heights'], 
@@ -437,265 +452,6 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
     print(f'Saved FIP bias vs height plot for {frequency.value:.3f}_{amplitude.value:.2f}_{strand_num}: {image_dir}fip_bias_vs_height_multi_{frequency.value:.3f}_{amplitude.value:.2f}_{strand_num}.png')
     plt.close()
     # import pdb; pdb.set_trace()
-    # ------------------------------------------------------------
-    # Create diagnostic plot to inspect all variables with height
-    # fig_diag, axes_diag = plt.subplots(3, 2, figsize=(15, 12))
-    # elements_list = ['Ca', 'Si', 'Fe', 'S', 'C', 'O', 'Ar', 'Mg']
-
-    # import pdb; pdb.set_trace()
-    # # Plot 1: Ionization fraction for all elements
-    # ax_ion = axes_diag[0, 0]
-    # for element in elements_list:
-    #     collision_calculator = CollisionCalculator(loop_properties, element)
-    #     collision_comp = collision_calculator.calculate_collision_components(wave_components.s_array)
-
-    #     # collision_comp = collision_components[element]
-    #     ion_frac_left = collision_comp.ionisation_fraction[start_idx:end_idx+1]
-    #     ion_frac_right = collision_comp.ionisation_fraction[left_idx:right_idx+1]
-        
-    #     ax_ion.semilogy(heights, ion_frac_left, '-', color=colors.get(element, 'black'), 
-    #                    label=f'{element} (Left)', alpha=0.8)
-    #     ax_ion.semilogy(heights_right, ion_frac_right, ':', color=colors.get(element, 'black'), 
-    #                    label=f'{element} (Right)', alpha=0.8)
-    
-    # ax_ion.set_xlabel('Height (Mm)')
-    # ax_ion.set_ylabel('Ionization Fraction')
-    # ax_ion.set_title('Ionization Fraction vs Height')
-    # ax_ion.grid(True, alpha=0.3)
-    # ax_ion.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    # # Plot 2: Effective velocity (v_eff) for all elements
-    # ax_veff = axes_diag[0, 1]
-    # for element in elements_list:
-    #     # collision_comp = collision_components[element]
-    #     collision_calculator = CollisionCalculator(loop_properties, element)
-    #     collision_comp = collision_calculator.calculate_collision_components(wave_components.s_array)
-
-    #     v_eff_left = collision_comp.v_eff[start_idx:end_idx+1]
-    #     v_eff_right = collision_comp.v_eff[left_idx:right_idx+1]
-        
-    #     ax_veff.semilogy(heights, v_eff_left, '-', color=colors.get(element, 'black'), 
-    #                     label=f'{element} (Left)', alpha=0.8)
-    #     ax_veff.semilogy(heights_right, v_eff_right, ':', color=colors.get(element, 'black'), 
-    #                     label=f'{element} (Right)', alpha=0.8)
-    
-    # ax_veff.set_xlabel('Height (Mm)')
-    # ax_veff.set_ylabel('v_eff (cm/s)')
-    # ax_veff.set_title('Effective Velocity vs Height')
-    # ax_veff.grid(True, alpha=0.3)
-    # ax_veff.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    # # Plot 3: Ion velocity (v_ion) for all elements
-    # ax_vion = axes_diag[1, 0]
-    # for element in elements_list:
-    #     # collision_comp = collision_components[element]
-    #     collision_calculator = CollisionCalculator(loop_properties, element)
-    #     collision_comp = collision_calculator.calculate_collision_components(wave_components.s_array)
-
-    #     v_ion_left = collision_comp.v_ion[start_idx:end_idx+1]
-    #     v_ion_right = collision_comp.v_ion[left_idx:right_idx+1]
-        
-    #     ax_vion.semilogy(heights, v_ion_left, '-', color=colors.get(element, 'black'), 
-    #                     label=f'{element} (Left)', alpha=0.8)
-    #     ax_vion.semilogy(heights_right, v_ion_right, ':', color=colors.get(element, 'black'), 
-    #                     label=f'{element} (Right)', alpha=0.8)
-    
-    # ax_vion.set_xlabel('Height (Mm)')
-    # ax_vion.set_ylabel('v_ion (cm/s)')
-    # ax_vion.set_title('Ion Velocity vs Height')
-    # ax_vion.grid(True, alpha=0.3)
-    # ax_vion.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    # # Plot 4: Turbulent speed (v_s) for all elements
-    # ax_vs = axes_diag[1, 1]
-    # for element in elements_list:
-    #     # collision_comp = collision_components[element]
-    #     collision_calculator = CollisionCalculator(loop_properties, element)
-    #     collision_comp = collision_calculator.calculate_collision_components(wave_components.s_array)
-
-    #     v_s_left = collision_comp.v_s[start_idx:end_idx+1]
-    #     v_s_right = collision_comp.v_s[left_idx:right_idx+1]
-        
-    #     ax_vs.semilogy(heights, v_s_left, '-', color=colors.get(element, 'black'), 
-    #                   label=f'{element} (Left)', alpha=0.8)
-    #     ax_vs.semilogy(heights_right, v_s_right, ':', color=colors.get(element, 'black'), 
-    #                   label=f'{element} (Right)', alpha=0.8)
-    
-    # ax_vs.set_xlabel('Height (Mm)')
-    # ax_vs.set_ylabel('v_s (cm/s)')
-    # ax_vs.set_title('Turbulent Speed vs Height')
-    # ax_vs.grid(True, alpha=0.3)
-    # ax_vs.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    # # Plot 5: Integral terms (the integrand) for all elements
-    # ax_integrand = axes_diag[2, 0]
-    # for element in elements_list:
-    #     # collision_comp = collision_components[element]
-    #     collision_calculator = CollisionCalculator(loop_properties, element)
-    #     collision_comp = collision_calculator.calculate_collision_components(wave_components.s_array)
-
-    #     calculator = FIPBiasCalculator(loop_properties, accel_left, collision_comp, 
-    #                                  wave_components.s_array[start_idx:end_idx+1], 
-    #                                  slow_mode_results[start_idx:end_idx+1])
-    #     integrand_left = calculator._integral_terms()
-        
-    #     calculator_right = FIPBiasCalculator(loop_properties, accel_right, collision_comp, 
-    #                                        wave_components.s_array[left_idx:right_idx+1], 
-    #                                        slow_mode_results[left_idx:right_idx+1])
-    #     integrand_right = calculator_right._integral_terms()
-        
-    #     ax_integrand.plot(heights, integrand_left, '-', color=colors.get(element, 'black'), 
-    #                      label=f'{element} (Left)', alpha=0.8)
-    #     ax_integrand.plot(heights_right, integrand_right, ':', color=colors.get(element, 'black'), 
-    #                      label=f'{element} (Right)', alpha=0.8)
-    
-    # ax_integrand.set_xlabel('Height (Mm)')
-    # ax_integrand.set_ylabel('Integrand')
-    # ax_integrand.set_title('FIP Bias Integrand vs Height')
-    # ax_integrand.grid(True, alpha=0.3)
-    # ax_integrand.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    # # Plot 6: v_st_squared (thermal + turbulent + slow mode) for all elements
-    # ax_vst = axes_diag[2, 1]
-    # k_B = 1.3807e-16  # Boltzmann constant [erg/K]
-    # amu = 1.66e-24    # atomic mass unit [g]
-    
-    # for element in elements_list:
-    #     # collision_comp = collision_components[element]
-    #     collision_calculator = CollisionCalculator(loop_properties, element)
-    #     collision_comp = collision_calculator.calculate_collision_components(wave_components.s_array)
-
-        
-    #     # Left side
-    #     T_left = loop_properties.T(wave_components.s_array[start_idx:end_idx+1]).value
-    #     v_s_left = collision_comp.v_s[start_idx:end_idx+1]
-    #     slow_mode_left = slow_mode_results[start_idx:end_idx+1].to(u.cm/u.s).value
-    #     v_st_squared_left = slow_mode_left**2 + v_s_left**2 + (k_B * T_left / (collision_comp.mass_number * amu))
-        
-    #     # Right side
-    #     T_right = loop_properties.T(wave_components.s_array[left_idx:right_idx+1]).value
-    #     v_s_right = collision_comp.v_s[left_idx:right_idx+1]
-    #     slow_mode_right = slow_mode_results[left_idx:right_idx+1].to(u.cm/u.s).value
-    #     v_st_squared_right = slow_mode_right**2 + v_s_right**2 + (k_B * T_right / (collision_comp.mass_number * amu))
-        
-    #     ax_vst.semilogy(heights, v_st_squared_left, '-', color=colors.get(element, 'black'), 
-    #                    label=f'{element} (Left)', alpha=0.8)
-    #     ax_vst.semilogy(heights_right, v_st_squared_right, ':', color=colors.get(element, 'black'), 
-    #                    label=f'{element} (Right)', alpha=0.8)
-    
-    # ax_vst.set_xlabel('Height (Mm)')
-    # ax_vst.set_ylabel('v_st² (cm²/s²)')
-    # ax_vst.set_title('Total Velocity Squared vs Height')
-    # ax_vst.grid(True, alpha=0.3)
-    # ax_vst.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    # plt.tight_layout()
-    # plt.savefig(output_dir + 'fip_bias_diagnostic_variables.png', dpi=300, bbox_inches='tight')
-    # print('saved fip_bias_diagnostic_variables.png')
-    # plt.close()
-    # import pdb; pdb.set_trace()
-    # # ------------------------------------------------------------
-    # # Create additional plot showing FIP bias at the two ends of the atmosphere
-    # fig_ends, ax_ends = plt.subplots(figsize=(10, 6))
-    
-    # # Extract FIP bias values at the ends for each element
-    # left_end_bias = []
-    # right_end_bias = []
-    # element_names = []
-    
-    # for element in elements:
-    #     # Get the last value from left side (highest height on left)
-    #     left_end_bias.append(fip_bias_heights[element]['left']['bias'][-1])
-    #     # Get the first value from right side (highest height on right)
-    #     right_end_bias.append(fip_bias_heights[element]['right']['bias'][0])
-    #     element_names.append(element)
-    
-    # x_pos = np.arange(len(element_names))
-    # width = 0.35
-    
-    # # Create bar plot
-    # bars1 = ax_ends.bar(x_pos - width/2, left_end_bias, width, 
-    #                    label='Left End (Low FIP)', alpha=0.8)
-    # bars2 = ax_ends.bar(x_pos + width/2, right_end_bias, width, 
-    #                    label='Right End (Low FIP)', alpha=0.8)
-    
-    # # Color bars according to element colors
-    # for i, (bar1, bar2) in enumerate(zip(bars1, bars2)):
-    #     element = element_names[i]
-    #     if element in colors:
-    #         bar1.set_color(colors[element])
-    #         bar2.set_color(colors[element])
-    
-    # ax_ends.set_xlabel('Elements')
-    # ax_ends.set_ylabel('FIP Bias Ratio')
-    # ax_ends.set_title('FIP Bias at Atmospheric Ends')
-    # ax_ends.set_xticks(x_pos)
-    # ax_ends.set_xticklabels(element_names)
-    # ax_ends.legend()
-    # ax_ends.grid(True, alpha=0.3)
-    
-    # print(f'saved full loop plot: {full_loop_plot_path}')
-    # # Add value labels on bars
-    # for i, (left_val, right_val) in enumerate(zip(left_end_bias, right_end_bias)):
-    #     ax_ends.text(i - width/2, left_val + 0.1, f'{left_val:.2f}', 
-    #                 ha='center', va='bottom', fontsize=8)
-    #     ax_ends.text(i + width/2, right_val + 0.1, f'{right_val:.2f}', 
-    #                 ha='center', va='bottom', fontsize=8)
-    
-    # plt.tight_layout()
-    # plt.savefig(output_dir + 'fip_bias_atmospheric_ends.png', dpi=300, bbox_inches='tight')
-    # print('saved fip_bias_atmospheric_ends.png')
-    # plt.close()
-    # import pdb; pdb.set_trace()
-
-    # # Also save the data
-    # import pickle
-    # data = {
-    #     'heights': heights,
-    #     'fip_bias': fip_bias_heights
-    # }
-    # with open(output_dir + 'fip_bias_vs_height.pkl', 'wb') as f:
-    #     pickle.dump(data, f)
-    # print("\nStopping for inspection. Examine fip_bias_calculator object.")
-    # # Create full loop plot
-    # full_loop_plot_data = plot_full_loop(output_data)
-    # full_loop_plot_path = os.path.join(output_dir, f'full_loop_plot_f{output_data["frequency"].value:.3f}_A{output_data["amplitude"].value:.2f}_L{output_data["loop_length"].to(u.Mm).value:.2f}.png')
-    # with open(full_loop_plot_path, 'wb') as f:
-    #     f.write(full_loop_plot_data)
-
-    # fip_bias_calculator.calculate_fip_bias(wave_components.s_array[0].to(u.cm), wave_components.s_array[-1].to(u.cm))
-    # fip_bias_calculator = FIPBiasCalculator(loop_properties, wave_components.ponderomotive_acceleration, collision_components,                                           wave_components.s_array)
-    
-    # Get both the profile data and plot
-    # fip_bias_height = [fip_bias_calculator.calculate_fip_bias(wave_components.s_array[0], height) for height in wave_components.s_array]
-    # fip_bias_profile = fip_bias_calculator.calculate_height_profile()
-    # fip_bias_plot = fip_bias_calculator.plot_profile(save=True, filepath='test_data/output/fip_bias_profile.png')
-    # Process results
-    # I_plus_R, I_plus_I, I_minus_R, I_minus_I = sol.y
-    # I_plus = I_plus_R * u.cm/u.s + 1j * I_plus_I * u.cm/u.s
-
-    # Print debug information
-    # print("\nDebug Information:")
-    # print("s_values shape:", s_values.shape)
-    # print("s_values unit:", s_values.unit)
-    # print("rho_s shape:", rho_s.shape) 
-    # print("rho_s unit:", rho_s.unit)
-    # print("VA_s shape:", VA_s.shape)
-    # print("VA_s unit:", VA_s.unit)
-    # print("B_s shape:", B_s.shape)
-    # print("B_s unit:", B_s.unit)
-    # print("I_plus shape:", I_plus.shape)
-    # print("I_plus unit:", I_plus.unit)
-    # print("I_minus shape:", I_minus.shape)
-    # print("I_minus unit:", I_minus.unit)
-    
-    # # Stop execution to check values
-    # print("\nStopping for debug. Press Ctrl+C to exit.")
-    # # import pdb; pdb.set_trace()
-
-    # print(rho_s.unit)
-    # print(VA_s.unit)
-    # print(I_plus.unit)
     flux_right = (0.25 * rho_s * np.abs(I_plus)**2 * VA_s).to(u.erg/u.cm**2/u.s)
     flux_left = (0.25 * rho_s * np.abs(I_minus)**2 * VA_s).to(u.erg/u.cm**2/u.s)
     flux_difference = flux_right - flux_left
@@ -707,59 +463,11 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
     gradient = np.gradient(delta_E_squared_over_B_squared, s_values)
     acceleration_cm_s2 = 0.25 * gradient * C_LIGHT_CM_S**2
 
-    # # Calculate ionization fractions for different elements
-    # elements = {
-    #     # 'H': {'ionization_energy': 13.6, 'g_i': 2, 'g_j': 1},
-    #     # 'He': {'ionization_energy': 24.6, 'g_i': 1, 'g_j': 2},
-    #     'C': {'ionization_energy': 11.26*u.eV, 'g_i': 9, 'g_j': 12},
-    #     'O': {'ionization_energy': 13.618*u.eV, 'g_i': 9, 'g_j': 12},
-    #     'Mg': {'ionization_energy': 7.646*u.eV, 'g_i': 1, 'g_j': 2},
-    #     'Si': {'ionization_energy': 8.1517*u.eV, 'g_i': 9, 'g_j': 12},
-    #     'S': {'ionization_energy': 10.36*u.eV, 'g_i': 9, 'g_j': 12},
-    #     'Fe': {'ionization_energy': 7.87*u.eV, 'g_i': 25, 'g_j': 30},
-    # }
-
-    # ion_effective_collision_frequencies = {}
-    # neutral_collision_frequencies = {}
-    # ionised_collision_frequencies = {}
-    # ionization_fractions = {}
-    # element_thermal_velocities = {}
-    # fractionation_ratios = {}
-    # for element, properties in elements.items():
-    #     ionization_fractions[element] = get_ionisation_fraction(
-    #         properties['g_i'],
-    #         properties['g_j'],
-    #         loop_properties.ne(s_values),
-    #         properties['ionization_energy'],
-    #         loop_properties.T(s_values)
-    #     )
-        # element_thermal_velocities[element] = get_Marsch1995_data(element)[4]
-        # fractionation_ratios[element] = calculate_ponderomotive_fractionation(
-        #     ionization_fractions[element],
-        #     element_thermal_velocities[element],
-        #     v_eff,
-        #     v_s_i,
-        #     a,
-        #     s_values
-        # )
-
-
-# def effective_collision_frequencies(v_ion, v_neutral, ionisation_fraction):
-
-# def calculate_ponderomotive_fractionation(
-#     xi: np.array,  # ionization fraction
-#     v_j: u.Quantity,  # thermal velocity of ion
-#     v_eff: np.array,  # effective collision frequency 
-#     v_s_i: np.array,  # ion collision frequency
-#     a: np.array,  # ponderomotive acceleration
-#     z: np.array,  # height array for integration
-# ) -> np.array:
 
     # Prepare output data
     output_data = {
         # Position array
         's_values': s_values,
-        
         # Wave properties
         'I_plus': I_plus,
         'I_minus': I_minus,
@@ -785,9 +493,11 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
         'collision_components_dict': collision_components_dict, 
         # Slow mode results
         'slow_mode_velocity': slow_mode_results,
+        'sound_speed': sound_speed_dict,
         # 'slow_mode_density_perturbation': slow_mode_results['density_perturbation'],
         # 'slow_mode_pressure_perturbation': slow_mode_results['pressure_perturbation'],
-        
+        'acoustic_flux': acoustic_flux,
+        'v_add': v_add,
         # FIP bias results for each element
         'fip_bias_heights': fip_bias_heights,
         
@@ -803,9 +513,12 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
         'loop_length': loop_properties.s_array[-1],
     }
 
-    with open(output_dir + f'test_loop_extra_properties_{frequency.value:.3f}_{amplitude.value:.2f}_{strand_num}.pkl', 'wb') as f:
+    # Update filename to include v_add (around line 818-819)
+    flux_str = f'_F{acoustic_flux.value:.1e}' if acoustic_flux is not None else ''
+    v_add_str = f'_v_add_{v_add.to(u.km/u.s).value:.1f}' if v_add is not None else ''
+    filename = f'test_loop_extra_properties_{frequency.value:.3f}_{amplitude.value:.2f}_{strand_num}{flux_str}{v_add_str}.pkl'
+    with open(output_dir + filename, 'wb') as f:
         pickle.dump(output_data, f)
-
     return output_data
 
 def save_results(output_data, output_file):
@@ -1067,35 +780,61 @@ if __name__ == "__main__":
     # amplitudes = [0.27] * u.km/u.s  
     # strand_nums = [700]
     # frequencies = np.linspace(0.01, 1.0, 50) * u.s**-1
-    frequencies = [0.069] * u.s**-1 # resonance frequency for starting VAL-C
-    amplitudes = [0.27] * u.km/u.s  
+    frequencies = [0.206] * u.s**-1 # resonance frequency for starting VAL-C
+
+
+    # amplitudes = [0.97,0.85,0.30,0.169476,0.123802] * u.km/u.s  
+    amplitudes = [0.97] * u.km/u.s  
+    # amplitudes = [0.97] * u.km/u.s  
     strand_nums = [700]
-    if frequencies == [0.065] * u.s**-1 or frequencies == [0.039] * u.s**-1:
-        strand_nums = [0]
-    # elif frequencies == [0.067] * u.s**-1:
-    #     strand_nums = [700]
+
+        # Add array of flux values to test
+    acoustic_fluxes = [
+        # 1e9 * u.erg / u.cm**2 / u.s,
+        1e8 * u.erg / u.cm**2 / u.s,
+        # 1e7 * u.erg / u.cm**2 / u.s,
+        # 1e6 * u.erg / u.cm**2 / u.s,
+        # 1e5 * u.erg / u.cm**2 / u.s,  # default
+        # 1e3 * u.erg / u.cm**2 / u.s,
+    ]
+    
+    # Array of additional turbulence values to test
+    v_add_values = [
+        0.0 * u.km/u.s,      # No additional turbulence (baseline)
+        1.0 * u.km/u.s,
+        2.0 * u.km/u.s,
+        5.0 * u.km/u.s,
+        10.0 * u.km/u.s,
+        20.0 * u.km/u.s,
+        50.0 * u.km/u.s,
+    ]
 
     # Define wrapper function
-    def process_strand_safe(strand_num):
+    def process_strand_safe(strand_num, frequency, amplitude, flux, v_add):
         try:
-            main(input_file, frequencies, amplitudes, input_file, strand_num)
-            return strand_num, True
+            results = process_hydrad_data(
+                input_file, frequency, amplitude, 
+                input_file, strand_num, acoustic_flux=flux, v_add=v_add
+            )
+            return strand_num, frequency.value, amplitude.value, flux.value, v_add.value, True
         except Exception as e:
-            print(f"Error processing strand {strand_num}: {e}")
+            print(f"Error processing strand {strand_num}, freq {frequency}, amp {amplitude}, flux {flux}, v_add {v_add}: {e}")
             import traceback
             traceback.print_exc()
-            return strand_num, False
+            return strand_num, frequency.value, amplitude.value, flux.value, v_add.value, False
     
-    # Use joblib with loky backend (better for scientific computing)
-    n_jobs = 5  # Number of parallel jobs
+    # Use joblib with loky backend
+    n_jobs = 5
     
     print(f"Starting parallel processing with {n_jobs} workers...")
     results = Parallel(n_jobs=n_jobs, backend='loky', verbose=10)(
-        delayed(process_strand_safe)(strand_num)
-        # for strand_num in range(0, 100)
+        delayed(process_strand_safe)(strand_num, frequency, amplitude, flux, v_add)
         for strand_num in strand_nums
-    )
-    
+        for frequency in frequencies
+        for amplitude in amplitudes
+        for flux in acoustic_fluxes
+        for v_add in v_add_values
+    )    
     # Check for failures
     failed = [r[0] for r in results if not r[1]]
     if failed:

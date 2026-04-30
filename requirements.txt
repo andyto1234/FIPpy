@@ -1,0 +1,12 @@
+numpy
+scipy
+astropy
+matplotlib
+plasmapy
+pydrad
+pandas
+joblib
+tqdm
+numba
+jupyter
+ipykernel

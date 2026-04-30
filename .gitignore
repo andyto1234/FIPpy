@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+
+# Generated analysis products
+results/
+*.pkl
+test_data/
+images/
+fip-bias-output/
+run_*/
+
+# Local HYDRAD and CHIANTI data
+1600/
+HYDRAD*/
+hydrad*/
+fip_bias_hydrad/
+chianti/*.npz
+
+# Local notebooks and notebook cache
+main_chianti.ipynb
+main_get_ionisation_fraction.ipynb
+Untitled-1.ipynb
+.ipynb_checkpoints/
+
+# Local profiling and presentation artifacts
+*.lprof
+*.key
+*.pdf
+
+# macOS junk
+.DS_Store
