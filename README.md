@@ -41,6 +41,9 @@ archivePrefix = {arXiv},
 - A clean tutorial notebook, `tutorial_hydrad_output.ipynb`, showing how to
   run the code with your own HYDRAD output and recreate representative
   paper-style plots.
+- `chianti/ion_fraction_with_T_CHIANTI_v10.npz`, a NumPy archive of CHIANTI v10
+  ionisation equilibrium for C, N, O, Ne, Mg, Si, S, Ar, Ca, and Fe on a shared
+  temperature grid (see **Required Inputs**).
 
 ## What Is Not Included
 
@@ -48,8 +51,7 @@ Large or machine-local research products are intentionally excluded:
 
 - HYDRAD simulation output folders.
 - Generated `results/`, figures, and pickle files.
-- The CHIANTI-derived ionisation table `chianti/ion_fraction_with_T_CHIANTI_v10.npz`
-  (see **Required Inputs**). CHIANTI database installations are also not bundled.
+- A full CHIANTI database installation (only the derived table above is bundled).
 
 You will need to provide your own HYDRAD output directory. The code expects it
 to be readable by `pydrad`.
@@ -77,28 +79,30 @@ At minimum, you need:
 - `STRAND_NUM`: strand index to read from that HYDRAD output.
 - Wave parameters such as frequency and amplitude.
 
-Optional but recommended CHIANTI v10 ionisation-equilibrium data should be
-placed at:
+The repository ships CHIANTI v10 ionisation-equilibrium data at:
 
 ```text
 chianti/ion_fraction_with_T_CHIANTI_v10.npz
 ```
 
-The file is not distributed with this repository (see `.gitignore`). Build it
-from the CHIANTI v10 `ioneq` data for the elements you need (for example with
-the CHIANTI IDL or Python interfaces), then save a NumPy archive with:
+`physics/saha.py` loads this path relative to the repository root, so your
+current working directory does not matter.
+
+The archive contains:
 
 - `temperature`: 1D array of temperature in kelvin (ascending)
-- one array per element named `{SYMBOL}_ioneq` (for example `Fe_ioneq`, `O_ioneq`)
-  with ionisation fractions on the same temperature grid
+- one array per element `{SYMBOL}_ioneq` (for example `Fe_ioneq`, `O_ioneq`) on
+  the same grid
 
-If you already have an older table `ion_fraction_with_T.npz` in the same
-format, copy or rename it to `ion_fraction_with_T_CHIANTI_v10.npz` in the
-`chianti/` directory. The loader resolves this path from the repository root,
-so the run location does not matter.
+To replace it (for example for more elements or a newer CHIANTI build), extract
+the corresponding `ioneq` data with the CHIANTI IDL or Python interfaces and
+save a new `.npz` in that format under the same filename. If you still use an
+older export named `ion_fraction_with_T.npz`, you can copy it to
+`ion_fraction_with_T_CHIANTI_v10.npz` in `chianti/` as long as the key layout
+matches.
 
-If the file is missing, `physics/saha.py` falls back to Saha-only ionisation
-fractions.
+If the file is missing or removed, `physics/saha.py` falls back to Saha-only
+ionisation fractions.
 
 ## Basic Usage
 
@@ -146,7 +150,7 @@ See `tutorial_hydrad_output.ipynb` for plotting examples.
 
 ```text
 composition/        FIP-bias and fractionation calculations
-chianti/            (optional) `ion_fraction_with_T_CHIANTI_v10.npz`; see README
+chianti/            `ion_fraction_with_T_CHIANTI_v10.npz` (bundled CHIANTI v10 table)
 loop/               HYDRAD reader, loop atmosphere, magnetic-field helpers
 maths/              Numerical interpolation helpers
 physics/            Ionisation, collision, speed, and frequency utilities

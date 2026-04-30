@@ -15,6 +15,7 @@ HYDRAD*/
 hydrad*/
 fip_bias_hydrad/
 chianti/*.npz
+!chianti/ion_fraction_with_T_CHIANTI_v10.npz
 
 # Local notebooks and notebook cache
 main_chianti.ipynb
