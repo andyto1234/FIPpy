@@ -191,11 +191,10 @@ archivePrefix = {arXiv},
 
 ## Notes and Caveats
 
-This is a **research-code release**, not a packaged library: interfaces are
-oriented toward reproducibility of the paper workflow rather than long-term API
-stability. Some driver scripts retain paper-specific defaults, historical
-command-line arguments, and author-local assumptions so that the original
-studies can be rerun without modification.
+This is a **research-code release**, and hopefully I will transfer this to a
+better packaged library later. Some driver scripts retain paper-specific
+defaults, historical command-line arguments, and author-local assumptions so
+that the original studies can be rerun without modification.
 
 For **new studies**, prefer calling `process_hydrad_data(...)` directly from
 your own scripts or notebooks and pass explicit paths and physical parameters.
