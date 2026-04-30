@@ -9,6 +9,29 @@ This repository contains the bare source code used for the paper
 [**"Chromospheric dynamics and turbulence regulate the solar FIP effect"**](https://ui.adsabs.harvard.edu/abs/2026arXiv260413174T/abstract)
 by Andy S. H. To, J. Martin Laming, Jeffrey Reep, and Adam J. Finley.
 
+## Citation
+
+If you use FIPpy or the methods in the paper, please cite:
+
+```bibtex
+@ARTICLE{To2026arXiv260413174T,
+       author = {{To}, Andy S.~H. and {Laming}, J. Martin and {Reep}, Jeffrey and {Finley}, Adam J.},
+        title = "{Chromospheric dynamics and turbulence regulate the solar FIP effect}",
+      journal = {arXiv e-prints},
+     keywords = {Solar and Stellar Astrophysics, Space Physics},
+         year = 2026,
+        month = apr,
+          eid = {arXiv:2604.13174},
+        pages = {arXiv:2604.13174},
+          doi = {10.48550/arXiv.2604.13174},
+archivePrefix = {arXiv},
+       eprint = {2604.13174},
+ primaryClass = {astro-ph.SR},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026arXiv260413174T},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+```
+
 ## What Is Included
 
 - Core Python modules for loop atmospheres, wave transport, collision rates,
