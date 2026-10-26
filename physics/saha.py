@@ -52,7 +52,7 @@
 # #     return ion_fraction
 
 
-# def get_ionisation_fraction(element, atomic_data, n_e, T):
+# def get_ionisation_fraction(element, atomic_data, n_e, T, *, table_path=None, bounds_error=True):
 #     """
 #     Ensure continuity by matching Saha and CHIANTI at transition point
 #     with proper bounds checking
@@ -125,6 +125,7 @@
 
 
 from pathlib import Path
+from functools import lru_cache
 
 from plasmapy.formulary.ionization import Saha
 import numpy as np
@@ -133,8 +134,27 @@ from astropy import units as u
 _CHIANTI_ION_FRACTION_NPZ = (
     Path(__file__).resolve().parent.parent
     / "chianti"
-    / "ion_fraction_with_T_CHIANTI_v10.npz"
+    / "ion_fraction_with_T_CHIANTI_v11.npz"
 )
+
+
+@lru_cache(maxsize=4)
+def _load_chianti_table(path):
+    with np.load(path, allow_pickle=False) as data:
+        return {key: data[key] for key in data.files}
+
+
+def chianti_ionised_fraction(element, T, *, table_path=None, bounds_error=True):
+    """Interpolate the v11 all-stage CIE fraction; never clamp outside its grid."""
+    path = Path(table_path) if table_path is not None else _CHIANTI_ION_FRACTION_NPZ
+    data = _load_chianti_table(str(path.resolve()))
+    temperature = np.asarray(T.to_value(u.K))
+    grid = data['temperature']
+    if np.any(~np.isfinite(temperature)) or (bounds_error and (
+            np.any(temperature < grid[0]) or np.any(temperature > grid[-1]))):
+        raise ValueError(f'CIE temperature outside table range {grid[0]:g}–{grid[-1]:g} K')
+    return np.clip(np.interp(temperature, grid, data[f'{element}_ioneq']), 0, 1)
+
 
 def sigmoid_weight(x, x0, width):
     """Calculate sigmoid weights for smooth transition"""
@@ -211,7 +231,7 @@ def _adaptive_gaussian_smooth(y, T_gradient, base_sigma=0.1, max_sigma=0.5):
     
     return smoothed
 
-def get_ionisation_fraction(element, atomic_data, n_e, T):
+def get_ionisation_fraction(element, atomic_data, n_e, T, *, table_path=None, bounds_error=True):
     """
     Calculate ionization fraction with smooth blending (no rescaling) and log-T transitions
     
@@ -228,20 +248,8 @@ def get_ionisation_fraction(element, atomic_data, n_e, T):
     saha_fraction = 1 / (1 + 1 / np.array(saha_fraction))
     saha_fraction = np.clip(saha_fraction, 0.0, 1.0)
     
-    try:
-        chianti_data = np.load(_CHIANTI_ION_FRACTION_NPZ)
-        chianti_fraction = chianti_data[f'{element}_ioneq']
-        chianti_temps = chianti_data['temperature']
-        chianti_interp = np.interp(T.to(u.K).value, chianti_temps, chianti_fraction)
-        chianti_interp = np.clip(chianti_interp, 0.0, 1.0)
-        
-    except FileNotFoundError:
-        print(
-            f'CHIANTI file not found ({_CHIANTI_ION_FRACTION_NPZ.name}), '
-            f'using Saha equation only for {element}'
-        )
-        return saha_fraction
-    
+    chianti_interp = chianti_ionised_fraction(element, T, table_path=table_path, bounds_error=bounds_error)
+
     _T = T.to(u.K).value
     
     # if element == 'Ar':
@@ -353,7 +361,7 @@ def get_ionisation_fraction(element, atomic_data, n_e, T):
     # ion_fraction = np.clip(ion_fraction, 0.0, 1.0)
     # return ion_fraction
 
-# def get_ionisation_fraction(element, atomic_data, n_e, T):
+# def get_ionisation_fraction(element, atomic_data, n_e, T, *, table_path=None, bounds_error=True):
 #     """
 #     Calculate ionization fraction using only the Saha equation
 #     """
@@ -373,15 +381,8 @@ def get_ionisation_fraction_debug(element, atomic_data, n_e, T):
     saha_fraction = 1 / (1 + 1 / np.array(saha_fraction))
     saha_fraction = np.clip(saha_fraction, 0.0, 1.0)
     
-    try:
-        chianti_data = np.load(_CHIANTI_ION_FRACTION_NPZ)
-        chianti_fraction = chianti_data[f'{element}_ioneq']
-        chianti_temps = chianti_data['temperature']
-        chianti_interp = np.interp(T.to(u.K).value, chianti_temps, chianti_fraction)
-        chianti_interp = np.clip(chianti_interp, 0.0, 1.0)
-    except FileNotFoundError:
-        chianti_interp = np.zeros_like(saha_fraction)
-    
+    chianti_interp = chianti_ionised_fraction(element, T)
+
     _T = T.to(u.K).value
     logT = np.log10(_T)
     

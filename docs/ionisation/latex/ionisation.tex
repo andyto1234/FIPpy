@@ -1,0 +1,380 @@
+% Paste into an existing document, or use \input{ionisation}.
+% Requires amsmath, amssymb, natbib, and references.bib.
+\section{Ionisation processes in the solar atmosphere}
+\label{sec:ionisation}
+
+The first ionisation potential (FIP) effect depends on the different responses
+of ions and neutral atoms to the ponderomotive force. We therefore require the
+ionisation fraction of each element throughout the fractionation region.
+This fraction depends on the local plasma conditions and on radiation received
+from other parts of the atmosphere \citep{Laming2015}. The formulation below
+describes a rate-based extension of the ionisation treatment in FIPpy.
+It specifies the physical processes and approximations required for this
+calculation; the existing Saha--CHIANTI interpolation is a separate prescription.
+
+\subsection{Populations, rate coefficients, and transition rates}
+
+For an element $X$ with atomic number $Z$, we define the charge-state fractions as
+\begin{equation}
+ f_{X,q} = \frac{n_{X^{q+}}}{n_X},
+ \qquad n_X = \sum_{q=0}^{Z} n_{X^{q+}},
+ \qquad \sum_{q=0}^{Z} f_{X,q}=1.
+ \label{eq:ion-fractions}
+\end{equation}
+Here $q=0$ denotes the neutral stage. Each charge-state population includes
+all of its bound levels. The total ionised fraction is
+\begin{equation}
+ \xi_X = \sum_{q=1}^{Z} f_{X,q} = 1-f_{X,0}.
+ \label{eq:ion-total-fraction}
+\end{equation}
+When only neutral and singly ionised states are retained, this reduces to
+$\xi_X=n_{X^+}/(n_{X^0}+n_{X^+})$. If higher stages are populated, their
+contributions must also be included in the ionised fraction.
+
+We distinguish a rate coefficient from a transition rate per particle.
+An electron-impact coefficient $C_X$ has units of
+$\mathrm{cm^3\,s^{-1}}$, while the corresponding transition rate is $n_e C_X$,
+with units of $\mathrm{s^{-1}}$. The photoionisation rate $\Gamma_X$ already
+has units of $\mathrm{s^{-1}}$. Multiplication by $n_e$ is required for
+electron-collision coefficients and is absent from the photoionisation term.
+
+\subsection{Electron-impact ionisation}
+
+In direct ionisation, an incident free electron transfers enough energy to
+remove a bound electron:
+\begin{equation}
+ X^{q+}+e^-\longrightarrow X^{(q+1)+}+2e^-.
+ \label{eq:ion-direct}
+\end{equation}
+The coefficient depends on the electron energy distribution and on the
+ionisation cross-section. For a thermal electron population, the coefficients
+used here assume a Maxwellian distribution at electron temperature $T_e$.
+An increase in $T_e$ changes the number of electrons above the threshold.
+
+Excitation--autoionisation provides another electron-impact channel. An
+electron collision excites the ion into an unstable state above an ionisation
+threshold, after which the ion ejects an electron:
+\begin{align}
+ X^{q+}+e^- &\longrightarrow (X^{q+})^{**}+e^-,
+ \\
+ (X^{q+})^{**} &\longrightarrow X^{(q+1)+}+e^-.
+\end{align}
+The double asterisk denotes the unstable intermediate state. Ordinary
+excitation to a bound level leaves the charge state unchanged; the
+autoionisation step produces the increase in charge.
+
+The electron-impact ionisation coefficient is therefore written as
+\begin{equation}
+ C_q(T_e)=C_{\mathrm{DI},q}(T_e)+C_{\mathrm{EA},q}(T_e),
+ \label{eq:ion-electron-total}
+\end{equation}
+where DI and EA denote direct ionisation and excitation--autoionisation.
+The rate per ion in stage $q$ is $n_e C_q$.
+
+\subsection{Radiative and dielectronic recombination}
+
+Radiative recombination occurs when an ion captures a free electron and emits
+a photon:
+\begin{equation}
+ X^{(q+1)+}+e^-\longrightarrow X^{q+}+h\nu.
+ \label{eq:ion-rr}
+\end{equation}
+The emitted photon carries away the energy released in the capture.
+For the spontaneous radiative-recombination coefficients considered here,
+the required inputs are the ion, the electron temperature, and the electron
+density used to convert the coefficient into a rate. An imposed incident
+radiation field is not required for this capture process.
+
+Dielectronic recombination involves electron capture accompanied by excitation
+of an electron already bound to the ion:
+\begin{align}
+ X^{(q+1)+}+e^- &\longrightarrow (X^{q+})^{**},
+ \\
+ (X^{q+})^{**} &\longrightarrow X^{q+}+h\nu.
+ \label{eq:ion-dr}
+\end{align}
+The intermediate state can also autoionise. Recombination succeeds when
+radiative stabilisation occurs before the captured electron is lost.
+This mechanism requires an electron already bound to the initial ion.
+
+In a model that represents both contributions through separate coefficients,
+the total is
+\begin{equation}
+ \alpha_q(T_e)
+ =\alpha_{\mathrm{RR},q}(T_e)+\alpha_{\mathrm{DR},q}(T_e),
+ \label{eq:ion-recombination}
+\end{equation}
+where $\alpha_q$ describes recombination from stage $q$ to $q-1$.
+The rate per ion is $n_e\alpha_q$. A database may instead supply a preferred
+total fit that differs from the sum of its separately tabulated components.
+The selected total and its provenance should then be retained consistently.
+
+At finite electron density, collisions can reionise highly excited states
+before stabilisation is complete. This suppresses the effective dielectronic
+recombination coefficient. Density corrections or effective rates are required
+when this process matters \citep{Nikolic2018,Dufresne2024}.
+Applying a suppression factor to a coefficient that already includes this
+effect would count the correction twice.
+
+\subsection{Photoionisation}
+
+A photon can remove a bound electron if its energy exceeds the relevant
+ionisation threshold:
+\begin{equation}
+ X^{q+}+h\nu\longrightarrow X^{(q+1)+}+e^-.
+ \label{eq:ion-photo-reaction}
+\end{equation}
+For a ground-state threshold $\chi_{X,q}$, the limiting frequency is
+$\nu_{\mathrm{th},q}=\chi_{X,q}/h$. The rate per target particle is
+\begin{equation}
+ \Gamma_{X,q}(s)=4\pi\int_{\nu_{\mathrm{th},q}}^\infty
+ \frac{J_\nu(s)}{h\nu}\,\sigma_{X,q}(\nu)\,\mathrm{d}\nu,
+ \label{eq:ion-photo-frequency}
+\end{equation}
+where $J_\nu$ is the local mean intensity and $\sigma_{X,q}$ is the
+photoionisation cross-section. The factor $J_\nu/(h\nu)$ converts energy
+intensity into photon-number intensity. Integration over frequency and solid
+angle gives a rate in $\mathrm{s^{-1}}$.
+
+For a spectrum tabulated per unit wavelength, the equivalent expression is
+\begin{equation}
+ \Gamma_{X,q}(s)=4\pi\int_0^{\lambda_{\mathrm{th},q}}
+ J_\lambda(s)\frac{\lambda}{hc}\,\sigma_{X,q}(\lambda)\,\mathrm{d}\lambda,
+ \qquad \lambda_{\mathrm{th},q}=\frac{hc}{\chi_{X,q}}.
+ \label{eq:ion-photo-wavelength}
+\end{equation}
+The spectral density and integration variable must use consistent units.
+For example, $J_\lambda$ expressed per nanometre is integrated over
+wavelength in nanometres, with the photon energy converted consistently.
+Cross-sections vanish on the long-wavelength side of the threshold.
+The integration grid must resolve the threshold and the spectral features
+that contribute appreciably to the rate.
+
+The analytic fits of \citet{Verner1996} provide a starting point for
+ground-state cross-sections within their stated coverage. In a multilevel
+model, excited levels have their own populations, thresholds, and
+cross-sections. A ground-state rate then requires a population assumption
+before it can represent the entire charge state.
+
+\subsection{The radiation field and the role of opacity}
+
+Radiation can reach a chromospheric parcel from the photosphere, the
+transition region and corona, or emission within the chromosphere itself.
+Photons from hotter regions can ionise atoms in a cooler parcel whose
+local thermal electrons rarely exceed the threshold. The dominant source
+depends on the element, wavelength, and position.
+
+The specific intensity $I_\nu(s,\Omega)$ describes radiation arriving from a
+direction $\Omega$. Its angular average is
+\begin{equation}
+ J_\nu(s)=\frac{1}{4\pi}\int I_\nu(s,\Omega)\,\mathrm{d}\Omega.
+ \label{eq:ion-mean-intensity}
+\end{equation}
+Irradiance and mean intensity are different angular moments of the radiation
+field. Converting an irradiance spectrum into $J_\nu$ therefore requires an
+assumption about the emitting geometry.
+
+For a uniformly bright photospheric surface, immediately above the surface,
+the upward hemisphere gives $J_\nu=I_{\nu,\mathrm{ph}}/2$ and the emergent
+surface flux is $F_{\nu,\mathrm{surf}}=\pi I_{\nu,\mathrm{ph}}$. Under this
+assumption, an irradiance measured at distance $d$ gives
+\begin{equation}
+ J_{\nu,\mathrm{ph},0}
+ =\frac{F_{\nu,d}}{2\pi}\left(\frac{d}{R_\odot}\right)^2.
+ \label{eq:ion-irradiance-conversion}
+\end{equation}
+Downward coronal illumination requires its own geometry and emission model.
+A spectrum measured at Earth does not uniquely determine the illumination
+incident on a particular loop.
+
+Along a ray with path coordinate $\ell$, radiative transfer satisfies
+\begin{equation}
+ \frac{\mathrm{d}I_\nu}{\mathrm{d}\ell}=-\kappa_\nu I_\nu+j_\nu,
+ \label{eq:ion-transfer}
+\end{equation}
+where $\kappa_\nu$ is the extinction coefficient in $\mathrm{cm^{-1}}$ and
+$j_\nu$ is the emission coefficient. Scattering contributes to extinction
+and to the radiation redistributed into other directions and frequencies.
+In the pure-absorption limit with no emission along the ray,
+\begin{equation}
+ I_\nu(\ell)=I_{\nu,0}\exp[-\tau_\nu(\ell)],
+ \qquad
+ \tau_\nu(\ell)=\int_{\ell_0}^{\ell}\kappa_\nu(\ell')\,\mathrm{d}\ell'.
+ \label{eq:ion-attenuation}
+\end{equation}
+
+For ground-state neutral-hydrogen continuum absorption alone,
+\begin{equation}
+ \kappa_\nu=n_{\mathrm{H^0}}\sigma_{\mathrm{H^0}}(\nu),
+ \qquad \tau_\nu=\sigma_{\mathrm{H^0}}(\nu)
+          \int n_{\mathrm{H^0}}\,\mathrm{d}\ell.
+ \label{eq:ion-h-opacity}
+\end{equation}
+Here the use of the total neutral density assumes that the ground state
+dominates the absorbing neutral-H population.
+Opacity determines the attenuation of an existing radiation field.
+Calculating $\Gamma_X$ also requires the incident radiation or internal
+emission and the target atom's cross-section.
+
+Ground-state H continuum absorption vanishes below its ionisation threshold
+of approximately $13.6\,\mathrm{eV}$. Metal continua and line opacity can still
+affect radiation at these lower photon energies. In particular, resonant
+absorption and scattering of Ly$\alpha$ require a line-transfer treatment
+or a separately specified approximation. They are absent from
+Equation~\eqref{eq:ion-h-opacity}. The assumed radiation and opacity treatment
+should therefore accompany every calculated photoionisation rate
+\citep{Laming2015,Dufresne2025}.
+
+\subsection{Charge exchange with hydrogen}
+
+Charge exchange transfers a bound electron between colliding particles:
+\begin{equation}
+ X^0+\mathrm{H^+}\rightleftharpoons X^++\mathrm{H^0}.
+ \label{eq:ion-cx}
+\end{equation}
+In the forward direction, hydrogen captures an electron and $X$ becomes
+ionised. In the reverse direction, $X^+$ captures hydrogen's electron and
+becomes neutral. The electron remains bound to one of the reaction products,
+and the total electric charge is conserved.
+
+The corresponding rates per target particle are
+\begin{equation}
+ I_{\mathrm{cx},X}=n_{\mathrm{H^+}}k_{\mathrm{cx,ion},X},
+ \qquad R_{\mathrm{cx},X}=n_{\mathrm{H^0}}k_{\mathrm{cx,rec},X}.
+ \label{eq:ion-cx-rates}
+\end{equation}
+The coefficients have units of $\mathrm{cm^3\,s^{-1}}$ and depend on the
+reaction and collision conditions. The appropriate heavy-particle
+temperature need not equal $T_e$ in a plasma with different species
+temperatures.
+
+Oxygen and hydrogen have closely spaced first-ionisation thresholds.
+Their nearly resonant charge exchange can consequently couple their
+ionisation fractions when it dominates the other channels.
+The fractions need not be exactly equal. Charge transfer can also affect
+other elements, including sulphur, and requires species-specific data
+\citep{Dufresne2021,Laming2021}. Elastic momentum-transfer collisions
+enter the fractionation calculation separately; their collision frequencies
+do not replace the reaction rates in Equation~\eqref{eq:ion-cx-rates}.
+
+\subsection{Statistical equilibrium between neutral and singly ionised states}
+
+For a two-stage model, the ionisation and neutralisation rates per particle are
+\begin{align}
+ I_X &= \Gamma_X+n_e C_X+n_{\mathrm{H^+}}k_{\mathrm{cx,ion},X},
+ \label{eq:ion-forward-total}\\
+ R_X &= n_e\alpha_X+n_{\mathrm{H^0}}k_{\mathrm{cx,rec},X}.
+ \label{eq:ion-reverse-total}
+\end{align}
+Here $C_X$ describes $X^0\rightarrow X^+$, while $\alpha_X$ describes
+$X^+\rightarrow X^0$. Statistical equilibrium requires
+\begin{equation}
+ n_{X^0}I_X=n_{X^+}R_X,
+\end{equation}
+which gives
+\begin{equation}
+ \xi_X=\frac{I_X}{I_X+R_X}.
+ \label{eq:ion-two-state-equilibrium}
+\end{equation}
+This expression includes photoionisation, electron collisions, and charge
+exchange. The term \emph{photoionisation equilibrium} is often used for
+calculations including radiation, although it does not by itself establish
+which channel dominates. The separate rates in
+Equations~\eqref{eq:ion-forward-total} and \eqref{eq:ion-reverse-total}
+allow that comparison to be made explicitly.
+
+In the collision-only, two-stage limit,
+\begin{equation}
+ \xi_X^{\mathrm{CIE}}=\frac{C_X}{C_X+\alpha_X}.
+ \label{eq:ion-two-state-cie}
+\end{equation}
+The common factor $n_e$ cancels when both coefficients depend only on
+temperature. A multistage coronal calculation instead solves the coupled
+population equations and returns the neutral fraction $f_{X,0}$.
+Its total ionised fraction remains $1-f_{X,0}$.
+
+\subsection{The LTE limit}
+
+Under local thermodynamic equilibrium (LTE), the neutral-to-singly-ionised
+ratio follows the Saha equation,
+\begin{equation}
+ \frac{n_{X^+}}{n_{X^0}}
+ =\frac{2}{n_e}
+  \left(\frac{2\pi m_e k_{\mathrm B}T}{h^2}\right)^{3/2}
+  \frac{U_{X^+}(T)}{U_{X^0}(T)}
+  \exp\left(-\frac{\chi_X}{k_{\mathrm B}T}\right),
+ \label{eq:ion-saha}
+\end{equation}
+where $U(T)$ denotes a partition function. Replacing the partition functions
+with constant statistical weights is an additional approximation.
+Its adequacy depends on the population of excited levels.
+
+LTE is a thermodynamic assumption, while statistical equilibrium specifies
+that the population rates balance. Statistical equilibrium can hold in
+non-LTE conditions when the radiation field and populations depart from their
+local thermodynamic values. Recovering LTE from a rate solver requires the
+relevant inverse processes and consistent detailed balance. An optically thin
+ionisation and spontaneous-recombination network alone does not establish
+the Saha limit.
+
+\subsection{Extension to multiple stages and time dependence}
+
+Let $I_q$ be the transition rate from stage $q$ to $q+1$, and $R_q$ the rate
+from stage $q$ to $q-1$. With neighbouring-stage transitions, the local
+population equations are
+\begin{equation}
+ \frac{\mathrm{d}f_{X,q}}{\mathrm{d}t}
+ = I_{q-1}f_{X,q-1}+R_{q+1}f_{X,q+1}
+   -(I_q+R_q)f_{X,q}.
+ \label{eq:ion-multistage}
+\end{equation}
+Terms outside the retained stages are omitted, with $R_0=0$ and $I_Z=0$.
+Statistical equilibrium sets the left-hand side to zero and enforces
+Equation~\eqref{eq:ion-fractions}. A prescribed-background calculation holds
+the atmospheric $T_e$, $n_e$, hydrogen populations, and specified radiation
+fixed while solving the trace-element populations. Solving for $n_e$ through
+charge conservation is a further coupling.
+
+If conditions change faster than the populations relax, the time-dependent
+equations must be evolved. For constant two-stage rates, the relaxation time
+is $(I_X+R_X)^{-1}$. More general networks have several relaxation modes.
+Hydrogen can retain a history of heating and shocks, which also changes
+the collision partners and opacity seen by the metals \citep{Carlsson2002}.
+Time-dependent calculations require initial populations and a sufficiently
+resolved atmospheric and radiation history. Advection introduces transport
+and boundary conditions in addition to the local reactions.
+
+\subsection{Atomic coefficients from CHIANTI through fiasco}
+
+The \texttt{fiasco} interface provides access to CHIANTI electron-impact
+ionisation and recombination coefficients \citep{FiascoDocumentation}.
+For a neutral--singly-ionised calculation, the required pair is the
+\texttt{ionization\_rate} of the neutral ion object and the
+\texttt{recombination\_rate} of the singly ionised object.
+For example, Fe~I ionisation describes Fe~I to Fe~II, while Fe~II recombination
+describes Fe~II to Fe~I. Fe~II ionisation instead describes Fe~II to Fe~III.
+The two properties of a single ion object therefore refer to different
+neighbouring-stage pairs.
+
+The properties \texttt{direct\_ionization\_rate} and
+\texttt{excitation\_autoionization\_rate} expose the ionisation components.
+The properties \texttt{radiative\_recombination\_rate} and
+\texttt{dielectronic\_recombination\_rate} expose recombination components.
+For production calculations, the preferred total
+\texttt{recombination\_rate} should be used because some ions have dedicated
+total fits in CHIANTI \texttt{trparams} files.
+
+Dataset availability must be checked for each ion. In the inspected
+CHIANTI~11.0.2 Fe~II dataset, the \texttt{easplups} file is absent.
+With fiasco~0.8.2, requesting the separate excitation--autoionisation
+coefficient raises \texttt{MissingDatasetException}. Its total-ionisation
+property handles this missing component internally and returns the
+available direct-ionisation contribution. This is the database/software
+treatment of the missing component; it does not demonstrate that the
+physical process is identically zero.
+
+Missing components should be recorded explicitly when plotting or exporting
+the rates. The ordinary temperature-dependent properties also require
+separate additions for the local photoionisation field, charge transfer,
+and density effects appropriate to the selected model
+\citep{Dufresne2024,Dufresne2025}.

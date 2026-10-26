@@ -1,10 +1,23 @@
 import pickle
+import sys
+from pathlib import Path
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 import io
 import os
 from matplotlib import ticker
+
+# Notebook kernels often append this repo after the standard library, so
+# "wave" binds to the stdlib WAV module. Search this repo first.
+_ROOT = str(Path(__file__).resolve().parent)
+if _ROOT in sys.path:
+    sys.path.remove(_ROOT)
+sys.path.insert(0, _ROOT)
+_loaded_wave = sys.modules.get("wave")
+if _loaded_wave is not None and not hasattr(_loaded_wave, "__path__"):
+    del sys.modules["wave"]
+
 from loop.properties import LoopProperties
 from loop.reader import HydradReader
 from physics.saha import get_ionisation_fraction
@@ -46,11 +59,11 @@ def plot_ionization(results):
 
 
 
-def process_hydrad_data(input_file, frequency, amplitude, strand_num=105):
+def process_hydrad_data(input_file, frequency, amplitude, strand_num=105, *, hydrogen_history=None):
     # Load data from input pickle file
     hydrad_strand = HydradReader(input_file, strand_num=strand_num).read_strand()
     print(type(hydrad_strand))
-    loop_properties = LoopProperties(hydrad_strand)
+    loop_properties = LoopProperties.from_hydrad(hydrad_strand, input_file, strand_num, hydrogen_history)
 
     analyzer = WaveAnalyzer(loop_properties)
     sol = analyzer.solve_wave_equations(amplitude, frequency)
@@ -580,6 +593,7 @@ def process_hydrad_data(input_file, frequency, amplitude, strand_num=105):
 
     # Prepare output data
     output_data = {
+        'hydrogen_metadata': loop_properties.hydrogen_metadata,
         's_values': s_values,
         'I_plus': I_plus,
         'I_minus': I_minus,

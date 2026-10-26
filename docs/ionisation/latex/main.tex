@@ -1,0 +1,897 @@
+% Paste this complete file into main.tex in Overleaf.
+% Compile with pdfLaTeX. No external files or shell escape are required.
+\documentclass[a4paper,10pt,twoside,openany]{book}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[top=2.2cm,bottom=2.5cm,inner=2.4cm,outer=1.8cm,
+  includeheadfoot,headheight=22pt]{geometry}
+\usepackage{xcolor,tikz}
+\usetikzlibrary{calc,positioning,arrows.meta}
+\usepackage[most]{tcolorbox}
+\usepackage{fancyhdr,titlesec,titletoc}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{enumitem,pifont,microtype}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{2em}
+
+% Colours from the supplied book template.
+\definecolor{Cap1Blue}{HTML}{1E9ED7}
+\definecolor{Cap2Orange}{HTML}{F07E26}
+\definecolor{Cap3Green}{HTML}{5BB85D}
+\definecolor{Cap4Purple}{HTML}{7C5CBF}
+\definecolor{AccentYellow}{HTML}{FFD93D}
+\definecolor{LightBlue}{HTML}{DAEEF8}
+\definecolor{LightOrange}{HTML}{FDEBD0}
+\definecolor{LightGreen}{HTML}{D5F5D5}
+\definecolor{LightPurple}{HTML}{EAE4F7}
+\definecolor{DarkText}{HTML}{1A1A2E}
+\definecolor{MidGray}{HTML}{6C757D}
+\definecolor{BoxGray}{HTML}{F4F6F8}
+\definecolor{RuleGray}{HTML}{DEE2E6}
+\color{DarkText}
+\newcommand{\ChapColor}{Cap1Blue}
+\newcommand{\ChapColorLight}{LightBlue}
+\newcommand{\setChapColor}[2]{%
+  \renewcommand{\ChapColor}{#1}%
+  \renewcommand{\ChapColorLight}{#2}}
+
+% Running heads and page numbers.
+\fancypagestyle{main}{%
+  \fancyhf{}
+  \fancyhead[LE]{\small\color{\ChapColor}\nouppercase{\leftmark}}
+  \fancyhead[RO]{\small\color{MidGray}\nouppercase{\rightmark}}
+  \fancyfoot[LE,RO]{%
+    \tikz[baseline=(p.base)]\node[
+      fill=\ChapColor,text=white,rounded corners=5pt,
+      minimum width=0.65cm,minimum height=0.5cm,
+      font=\small\bfseries](p){\thepage};}
+  \fancyfoot[C]{\tiny\color{MidGray}FIPpy: ionisation physics}
+  \renewcommand{\headrulewidth}{0pt}
+  \renewcommand{\footrulewidth}{0pt}}
+\pagestyle{main}
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyfoot[C]{\small\color{MidGray}\thepage}
+  \renewcommand{\headrulewidth}{0pt}}
+
+% Chapter and section headings.
+\newcommand{\chaptertitleformat}[1]{%
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[\ChapColor] (-0.5cm,0) rectangle (0,-4.2cm);
+    \fill[\ChapColor] (1.45cm,-1.6cm) circle (1.2cm);
+    \fill[white,opacity=0.15] (1.45cm,-1.6cm) circle (0.95cm);
+    \node[text=white,font=\fontsize{44}{48}\selectfont\bfseries]
+      at (1.45cm,-1.6cm){\thechapter};
+    \node[anchor=north west,text=\ChapColor,
+      font=\fontsize{25}{29}\selectfont\bfseries,
+      align=left,text width=9.5cm] at (3.1cm,-0.4cm){#1};
+    \fill[\ChapColor,opacity=0.12]
+      (-0.5cm,-3.5cm) rectangle (\textwidth,-4.2cm);
+  \end{tikzpicture}
+  \vspace{4.6cm}}
+\titleformat{\chapter}[block]{}{}{0pt}{\chaptertitleformat}
+\titleformat{name=\chapter,numberless}[block]
+  {\Huge\bfseries\color{\ChapColor}}{}{0pt}{}
+\titlespacing*{\chapter}{0pt}{0pt}{12pt}
+\titleformat{\section}{\large\bfseries\color{\ChapColor}}
+  {\thesection}{0.7em}{}[\color{\ChapColor}\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries\color{DarkText}}
+  {\thesubsection}{0.7em}{}
+\renewcommand{\chaptermark}[1]{\markboth{\thechapter.\ #1}{}}
+\renewcommand{\sectionmark}[1]{\markright{\thesection.\ #1}}
+\numberwithin{equation}{chapter}
+
+% Boxes follow the supplied template.
+\tcbset{bookbox/.style={
+  enhanced,breakable,arc=6pt,boxrule=1pt,
+  left=8pt,right=8pt,top=10pt,bottom=7pt,
+  fonttitle=\bfseries\small,
+  attach boxed title to top left={xshift=8pt,yshift=-3pt},
+  boxed title style={arc=4pt,boxrule=0pt}}}
+\newenvironment{definition}[1]{%
+  \begin{tcolorbox}[bookbox,colback=\ChapColorLight,
+    colframe=\ChapColor,colbacktitle=\ChapColor,coltitle=white,
+    title={Definition: #1}]}{\end{tcolorbox}}
+\newenvironment{example}[1]{%
+  \begin{tcolorbox}[bookbox,colback=BoxGray,colframe=RuleGray,
+    colbacktitle=MidGray,coltitle=white,
+    title={Example: #1}]}{\end{tcolorbox}}
+\newenvironment{caution}{%
+  \begin{tcolorbox}[bookbox,colback=LightOrange,colframe=Cap2Orange,
+    colbacktitle=Cap2Orange,coltitle=white,
+    title={Scope of the approximation}]}{\end{tcolorbox}}
+\newenvironment{lesson}[1]{%
+  \begin{tcolorbox}[bookbox,colback=white,colframe=\ChapColor,
+    colbacktitle=\ChapColor,coltitle=white,
+    title={#1}]}{\end{tcolorbox}}
+\newcommand{\formula}[2][]{%
+  \begin{tcolorbox}[enhanced,breakable,
+    colback=LightOrange,colframe=Cap2Orange,arc=6pt,boxrule=1.2pt]
+    \if\relax\detokenize{#1}\relax\else
+      {\small\bfseries\color{Cap2Orange}#1}\par\smallskip
+    \fi
+    \begin{equation*}#2\end{equation*}
+  \end{tcolorbox}}
+\setlist[itemize]{label=\textcolor{\ChapColor}{\ding{228}},
+  leftmargin=1.4em,itemsep=3pt}
+\setlist[enumerate]{leftmargin=1.8em,itemsep=3pt}
+\lstset{language=Python,basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{Cap4Purple},commentstyle=\color{MidGray},
+  stringstyle=\color{Cap3Green},backgroundcolor=\color{BoxGray},
+  frame=single,rulecolor=\color{RuleGray},breaklines=true,
+  columns=fullflexible,keepspaces=true,showstringspaces=false}
+\titlecontents{chapter}[0pt]{\vspace{5pt}\bfseries}
+  {\contentslabel{1.8em}}{}{\titlerule*[6pt]{.}\contentspage}
+\titlecontents{section}[2.5em]{}
+  {\contentslabel{2.5em}}{}{\titlerule*[6pt]{.}\contentspage}
+
+\begin{document}
+
+\begin{titlepage}
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[Cap1Blue]
+    (current page.north west) rectangle (current page.south east);
+  \fill[Cap2Orange]
+    (current page.north west) rectangle
+    ($(current page.south west)+(0.65cm,0)$);
+  \fill[AccentYellow]
+    ($(current page.north west)+(0.65cm,0)$) rectangle
+    ($(current page.south west)+(0.95cm,0)$);
+  \fill[white,opacity=0.07]
+    ($(current page.south east)+(-1cm,3cm)$) circle (6cm);
+  \node[anchor=north west,text=white,
+    font=\fontsize{42}{48}\selectfont\bfseries,
+    align=left,text width=15cm]
+    at ($(current page.north west)+(2cm,-3.5cm)$)
+    {IONISATION\\PHYSICS};
+  \draw[white,line width=1.2pt]
+    ($(current page.north west)+(2cm,-7.5cm)$) --
+    ($(current page.north east)+(-2cm,-7.5cm)$);
+  \node[anchor=north west,text=AccentYellow,
+    font=\fontsize{21}{26}\selectfont,align=left,text width=14cm]
+    at ($(current page.north west)+(2cm,-8.2cm)$)
+    {Atomic processes and radiation\\in the solar atmosphere};
+  \node[anchor=north west,text=white,font=\large,
+    align=left,text width=14cm]
+    at ($(current page.north west)+(2cm,-12cm)$)
+    {1.\ Population balance and equilibrium\\[12pt]
+     2.\ Ionisation and recombination processes\\[12pt]
+     3.\ Radiation, opacity and photoionisation\\[12pt]
+     4.\ A rate-based formulation for FIPpy};
+  \node[anchor=south west,text=white,font=\small]
+    at ($(current page.south west)+(2cm,1.5cm)$)
+    {FIPpy \textbullet\ Physical background and proposed formulation};
+\end{tikzpicture}
+\end{titlepage}
+
+\frontmatter
+\chapter*{About these notes}
+\addcontentsline{toc}{chapter}{About these notes}
+These notes describe the atomic processes that determine the ionisation
+fractions used in a FIP fractionation calculation. We begin with the
+population balance, then introduce the individual reactions and the
+radiation field required for photoionisation. The final chapter combines
+these terms into a rate-based formulation for FIPpy.
+
+The rate equations describe a proposed extension of the ionisation
+treatment. They should not be read as a statement that all of these
+processes are already implemented in FIPpy. In a calculation on a
+prescribed atmosphere, the temperature, electron density and hydrogen
+populations are inputs. Their consistency and the adopted radiation
+field remain part of the physical assumptions.
+
+We use cgs units for densities and atomic coefficients. Binary rate
+coefficients have units of $\mathrm{cm^3\,s^{-1}}$, while transition
+rates per target particle have units of $\mathrm{s^{-1}}$.
+
+\tableofcontents
+\mainmatter
+
+\setChapColor{Cap1Blue}{LightBlue}
+\chapter{Population balance and equilibrium}
+
+\section{Neutral and ionised populations}
+For an element $X$ with atomic number $Z_X$, let $n_q$ denote the
+number density in charge state $q$, where $q=0$ is neutral and
+$q=Z_X$ is fully stripped. The total number density and charge-state
+fractions are
+\begin{equation}
+  n_X=\sum_{q=0}^{Z_X}n_q,\qquad
+  f_q=\frac{n_q}{n_X},\qquad
+  \sum_{q=0}^{Z_X}f_q=1.
+\end{equation}
+
+\begin{definition}{Total ionised fraction}
+The fraction of an element in all charged states is
+\begin{equation}
+  \xi_X=\sum_{q=1}^{Z_X}f_q=1-f_0.
+  \label{eq:xi}
+\end{equation}
+If excited levels are resolved, $f_0$ includes all bound levels of the
+neutral atom. An atom remains neutral when one of its electrons is
+excited to another bound level.
+\end{definition}
+
+The distinction between $f_1$ and $\xi_X$ matters when multiply ionised
+states are populated. In a neutral--singly-ionised approximation, they
+are equal. With additional stages, $\xi_X$ includes their populations
+as well.
+
+In the usual low-frequency ponderomotive description, the force acts
+on the charged component. The ionisation calculation therefore
+determines how much of each element can participate in the
+fractionation process \cite{Laming2015}.
+
+\section{Rate coefficients and transition rates}
+A binary reaction coefficient describes the effectiveness of a
+collision after averaging over the relative velocities of the
+particles. Multiplication by the collision-partner density gives the
+transition rate per target particle. For electron-impact ionisation,
+\begin{equation}
+  R_{\mathrm{e,ion},X}=n_e C_X(T_e).
+  \label{eq:electron_rate}
+\end{equation}
+Here $C_X$ has units of $\mathrm{cm^3\,s^{-1}}$, and $R_{\mathrm{e,ion},X}$
+has units of $\mathrm{s^{-1}}$. The corresponding number of ionisation
+events per unit volume and time is $n_0n_eC_X$, with units of
+$\mathrm{cm^{-3}\,s^{-1}}$.
+
+The photoionisation rate $\Gamma_X$ already has units of
+$\mathrm{s^{-1}}$. It is calculated from the radiation field and
+the atomic cross-section. No additional factor of $n_e$ enters this
+rate.
+
+\section{The two-stage balance}
+Consider a parcel containing neutral atoms $X^0$ and singly charged
+ions $X^+$. Let $R_{\mathrm{ion},X}$ be the total rate per neutral
+atom for conversion to $X^+$, and let $R_{\mathrm{rec},X}$ be the
+total rate per ion for conversion to $X^0$.
+
+With a conserved number of atoms in the parcel, their ionised
+fraction satisfies
+\begin{equation}
+  \frac{d\xi_X}{dt}
+  =(1-\xi_X)R_{\mathrm{ion},X}
+  -\xi_X R_{\mathrm{rec},X}.
+  \label{eq:two_stage_time}
+\end{equation}
+Statistical equilibrium sets the left-hand side to zero. Thus,
+\begin{equation}
+  n_0R_{\mathrm{ion},X}=n_1R_{\mathrm{rec},X},
+\end{equation}
+and, provided the sum of the rates is positive,
+\formula[Two-stage equilibrium]{
+  \xi_X^{\mathrm{eq}}
+  =\frac{R_{\mathrm{ion},X}}
+  {R_{\mathrm{ion},X}+R_{\mathrm{rec},X}}}
+
+Equilibrium fixes the populations by balancing the reactions.
+The rates can include electron collisions, photons and charge
+exchange in the same calculation.
+
+\section{Collisional equilibrium and LTE}
+In a low-density, optically thin collisional model, electron-impact
+ionisation is balanced by electron recombination:
+\begin{equation}
+  R_{\mathrm{ion},X}=n_eC_X,\qquad
+  R_{\mathrm{rec},X}=n_e\alpha_X.
+\end{equation}
+For the two-stage case,
+\begin{equation}
+  \xi_X^{\mathrm{CIE}}=\frac{C_X}{C_X+\alpha_X}.
+\end{equation}
+The common factor $n_e$ cancels when the coefficients depend only
+on temperature. Density effects can change this result when they
+modify the effective coefficients or the level populations.
+
+Local thermodynamic equilibrium (LTE) provides a different closure.
+The Saha equation for the first ionisation stage is
+\begin{equation}
+  \frac{n_1}{n_0}
+  =\frac{2}{n_e}
+   \left(\frac{2\pi m_ek_BT}{h^2}\right)^{3/2}
+   \frac{U_1(T)}{U_0(T)}
+   \exp\left(-\frac{\chi_X}{k_BT}\right),
+  \label{eq:saha}
+\end{equation}
+where $\chi_X$ is the first ionisation energy and $U_0,U_1$ are
+the internal partition functions. The factor 2 accounts for the
+free-electron spin degeneracy in this convention.
+
+Replacing $U_0,U_1$ by ground-state statistical weights is an
+additional approximation. Its accuracy depends on the contribution
+of excited levels. A rate network containing only electron-impact
+ionisation and optically thin radiative recombination does not
+automatically recover the Saha limit; the inverse processes required
+for detailed balance must also be included.
+
+\section{Equilibrium and time dependence}
+For constant two-stage rates, Equation~\eqref{eq:two_stage_time} has
+the solution
+\begin{equation}
+  \xi_X(t)=\xi_X^{\mathrm{eq}}
+  +[\xi_X(0)-\xi_X^{\mathrm{eq}}]\exp(-t/\tau_X),
+  \qquad
+  \tau_X=\frac{1}{R_{\mathrm{ion},X}+R_{\mathrm{rec},X}}.
+\end{equation}
+
+Statistical equilibrium is appropriate when the populations relax
+on a time scale short compared with changes in the atmosphere and
+radiation field. Rapid heating or a flow through a steep atmospheric
+gradient can invalidate this assumption. Hydrogen provides a
+well-studied example of delayed ionisation and recombination in
+the dynamic chromosphere \cite{CarlssonStein2002}.
+
+A non-LTE calculation can still assume statistical equilibrium.
+Non-LTE specifies that local thermodynamic relations are
+insufficient to determine the populations; time-dependent
+ionisation retains their evolution explicitly.
+
+\setChapColor{Cap2Orange}{LightOrange}
+\chapter{Atomic processes}
+
+\section{Direct electron-impact ionisation}
+A free electron can transfer enough energy to eject a bound
+electron:
+\begin{equation}
+  X^{q+}+e^-\longrightarrow X^{(q+1)+}+2e^-.
+\end{equation}
+The incident electron must have sufficient energy for the transition.
+For thermal electrons, the coefficient $C_{\mathrm{DI},q}(T_e)$
+averages the cross-section over their velocity distribution.
+
+At a low electron temperature, relatively few electrons can exceed
+a large ionisation threshold. Increasing the temperature changes
+the number of electrons able to drive the reaction. The
+temperature dependence is already included in the coefficient
+returned by fiasco \cite{FiascoDocs}.
+
+\section{Excitation--autoionisation}
+An electron collision can first excite an ion into an unstable
+state above an ionisation threshold:
+\begin{align}
+  X^{q+}+e^- &\longrightarrow (X^{q+})^{**}+e^-,\\
+  (X^{q+})^{**} &\longrightarrow X^{(q+1)+}+e^-.
+\end{align}
+The double asterisk denotes the unstable intermediate state.
+Its decay ejects an electron, so the net result is ionisation.
+
+Excitation to an ordinary bound level leaves the charge unchanged.
+Excitation--autoionisation specifically requires a state that can
+decay by electron ejection. Fiasco combines direct ionisation and
+this indirect contribution in its total electron-impact coefficient:
+\begin{equation}
+  C_q=C_{\mathrm{DI},q}+C_{\mathrm{EA},q}.
+\end{equation}
+
+\section{Radiative recombination}
+A free electron can be captured by an ion while a photon carries
+away the excess energy:
+\begin{equation}
+  X^{(q+1)+}+e^-\longrightarrow X^{q+}+h\nu.
+\end{equation}
+Capture may populate an excited bound level, followed by further
+radiative decays. A total radiative recombination coefficient sums
+the relevant capture contributions.
+
+The word \emph{radiative} describes photon emission during capture.
+The standard spontaneous recombination coefficient depends on the
+electron distribution and atomic structure; it does not require an
+incident ionising radiation field. Stimulated contributions require
+a separate treatment when they are relevant.
+
+\section{Dielectronic recombination}
+During dielectronic capture, a free electron is captured while an
+electron already bound to the ion is excited:
+\begin{equation}
+  X^{(q+1)+}+e^-\longrightarrow (X^{q+})^{**}.
+\end{equation}
+This intermediate state can either eject an electron or emit a
+photon that stabilises the captured electron:
+\begin{align}
+  (X^{q+})^{**}
+    &\longrightarrow X^{(q+1)+}+e^-,
+    &&\text{autoionisation},\\
+  (X^{q+})^{**}
+    &\longrightarrow (X^{q+})^{*}+h\nu,
+    &&\text{radiative stabilisation}.
+\end{align}
+Recombination succeeds through the stabilising branch. The process
+involves the incoming electron and an initially bound electron;
+it does not describe the capture of two free electrons.
+
+In a resolved calculation, these channels and their branching
+probabilities enter explicitly. A total dielectronic coefficient
+includes their net contribution. At finite density, collisions can
+reionise weakly bound recombined states before they complete their
+radiative decays, reducing the effective recombination coefficient
+\cite{Nikolic2018}.
+
+For the usual decomposition,
+\begin{equation}
+  \alpha_q=\alpha_{\mathrm{RR},q}
+           +\alpha_{\mathrm{DR},q}.
+\end{equation}
+Fiasco also uses dedicated total-recombination data for some ions.
+Its \texttt{recombination\_rate} property should therefore be used
+for the preferred total, even when the components are plotted
+separately \cite{FiascoDocs}.
+
+\section{Photoionisation}
+A photon can eject an electron when its energy exceeds the
+ionisation threshold of the initial state:
+\begin{equation}
+  X^{q+}+h\nu\longrightarrow X^{(q+1)+}+e^-,
+  \qquad h\nu\geq\chi_q.
+\end{equation}
+
+The photons can originate outside the local plasma parcel.
+Consequently, cool material can be photoionised even when its
+thermal electrons rarely reach the required energy. The local
+electron temperature and density are insufficient to determine
+this contribution.
+
+Photospheric radiation can ionise species with sufficiently low
+thresholds. Radiation from the transition region and corona, and
+radiation produced within the chromosphere, can also contribute.
+Their relative importance depends on the spectrum at the position
+of the atom and the cross-section of the transition
+\cite{Laming2015,Dufresne2021}.
+
+\section{Charge exchange with hydrogen}
+Charge exchange transfers a bound electron between collision
+partners. For the first ionisation stage, the reactions are
+\begin{align}
+  X^0+\mathrm{H}^+&\longrightarrow X^++\mathrm{H}^0,
+    &&\text{ionisation of }X,\\
+  X^++\mathrm{H}^0&\longrightarrow X^0+\mathrm{H}^+,
+    &&\text{recombination of }X.
+\end{align}
+The electron remains bound to one of the collision partners.
+The total charge is conserved, and the reaction itself does not
+create a free electron.
+
+\formula[Rates per target particle]{
+  \begin{aligned}
+    R_{\mathrm{cx,ion},X}
+      &=n_{\mathrm{H}^+}k_{\mathrm{cx,ion},X},\\
+    R_{\mathrm{cx,rec},X}
+      &=n_{\mathrm{H}^0}k_{\mathrm{cx,rec},X}.
+  \end{aligned}}
+
+The coefficients depend on the species and the collision conditions.
+They describe heavy-particle collisions, so the relevant relative
+velocity distribution must be specified when the electron and ion
+temperatures differ.
+
+\begin{example}{Oxygen and hydrogen}
+The first ionisation energies of oxygen and hydrogen are close.
+Charge exchange between them is therefore nearly resonant and can
+strongly couple their ionisation states. If these reactions dominate
+a two-stage balance,
+\begin{equation}
+  \frac{n_{\mathrm{O}^+}}{n_{\mathrm{O}^0}}
+  \simeq
+  \frac{n_{\mathrm{H}^+}}{n_{\mathrm{H}^0}}
+  \frac{k_{\mathrm{cx,ion},\mathrm O}}
+       {k_{\mathrm{cx,rec},\mathrm O}}.
+\end{equation}
+The coupling does not require the O and H ionised fractions to be
+exactly equal.
+\end{example}
+
+Charge exchange can also affect other elements. Laming's later
+treatment revises the adopted rates for sulphur, sodium and iron,
+illustrating the importance of the species-specific data
+\cite{Laming2021}. Elastic collisions that exchange momentum and
+charge-transfer reactions should retain separate coefficients.
+
+\setChapColor{Cap3Green}{LightGreen}
+\chapter{Radiation and opacity}
+
+\section{Specific intensity and mean intensity}
+The specific intensity $I_\nu(s,\Omega)$ describes radiation at
+frequency $\nu$, position $s$ and propagation direction $\Omega$.
+In cgs units,
+\begin{equation}
+  [I_\nu]=
+  \mathrm{erg\,s^{-1}\,cm^{-2}\,sr^{-1}\,Hz^{-1}}.
+\end{equation}
+The mean intensity averages over directions:
+\begin{equation}
+  J_\nu(s)=\frac{1}{4\pi}\int I_\nu(s,\Omega)\,d\Omega.
+  \label{eq:mean_intensity}
+\end{equation}
+
+Photons arriving from any direction can ionise an atom. This is why
+the photoionisation rate uses the angular integral of intensity.
+The flux through a chosen surface instead contains the directional
+factor $\mu$, the cosine relative to its normal:
+\begin{equation}
+  F_\nu=\int I_\nu(\Omega)\mu\,d\Omega.
+\end{equation}
+An isotropic field can have nonzero $J_\nu$ and zero net flux.
+A measured irradiance therefore requires a geometrical prescription
+before it can be used as a local mean intensity.
+
+\section{The photoionisation integral}
+Let $\sigma_X(\nu)$ be the photoionisation cross-section of the
+initial atomic state. Dividing the radiation intensity by $h\nu$
+converts energy into photon number. The rate per atom is
+\begin{equation}
+  \Gamma_X(s)=4\pi
+    \int_{\nu_{\mathrm{th},X}}^\infty
+    \frac{J_\nu(s)}{h\nu}\sigma_X(\nu)\,d\nu,
+  \qquad h\nu_{\mathrm{th},X}=\chi_X.
+  \label{eq:gamma_nu}
+\end{equation}
+The result has units of $\mathrm{s^{-1}}$. The photoionisation
+events per unit volume and time are $n_0\Gamma_X$ for a neutral
+initial population.
+
+For a spectrum tabulated in wavelength, the equivalent expression is
+\formula[Photoionisation on a wavelength grid]{
+  \Gamma_X(s)=4\pi
+    \int_0^{\lambda_{\mathrm{th},X}}
+    J_\lambda(s)\frac{\lambda}{hc}
+    \sigma_X(\lambda)\,d\lambda,
+  \qquad
+  \lambda_{\mathrm{th},X}=\frac{hc}{\chi_X}.}
+Here $J_\lambda$ is a spectral intensity per unit wavelength.
+The spectral-density conversion satisfies
+$J_\lambda\,|d\lambda|=J_\nu\,|d\nu|$; replacing the axis without
+converting the spectral density changes the integral.
+
+Ground-state cross-sections can be obtained from the fits of
+Verner et al.\ \cite{Verner1996} within their stated coverage and
+energy ranges. An excited initial level has its own threshold
+and cross-section, which must be included in a level-resolved model.
+
+\begin{example}{Photons above the threshold}
+For a narrow incident line at frequency $\nu_L$, let
+$\mathcal{J}_L=\int_{\mathrm{line}}J_\nu\,d\nu$. If the cross-section
+varies little across the line and $\nu_L>\nu_{\mathrm{th},X}$,
+\begin{equation}
+  \Gamma_{X,L}\simeq
+  \frac{4\pi\mathcal{J}_L}{h\nu_L}\sigma_X(\nu_L).
+\end{equation}
+If the line lies below the initial state's threshold, its photons
+cannot photoionise that state. A bright line therefore need not
+contribute to every element.
+\end{example}
+
+\section{Opacity and the propagation of photons}
+The extinction coefficient $\kappa_\nu$ has units of inverse
+length. Optical depth along a radiation path $\ell$ is
+\begin{equation}
+  \tau_\nu(\ell_0,\ell)=
+  \int_{\ell_0}^{\ell}\kappa_\nu(\ell')\,d\ell'.
+\end{equation}
+For a bound-free absorber $a$,
+\begin{equation}
+  \kappa_{\nu,a}^{\mathrm{bf}}=n_a\sigma_a(\nu).
+\end{equation}
+Several populations can contribute to the total opacity.
+
+If a ray undergoes pure absorption and there is no emission along
+its path, its intensity is
+\begin{equation}
+  I_\nu(\ell)=I_{\nu,0}\exp[-\tau_\nu(\ell_0,\ell)].
+  \label{eq:attenuation}
+\end{equation}
+The incident intensity $I_{\nu,0}$ is an independent input.
+Opacity specifies attenuation; it does not specify the source
+brightness.
+
+With emission included, the transfer equation is
+\begin{equation}
+  \frac{dI_\nu}{d\ell}=-\kappa_\nu I_\nu+j_\nu,
+  \label{eq:transfer}
+\end{equation}
+where $j_\nu$ is the emissivity. Scattering contributes to extinction
+and to radiation entering the ray from other directions. In that
+case the radiation field must be found with the corresponding
+scattering treatment.
+
+\begin{lesson}{From a radiation source to an ionisation rate}
+A photoionisation calculation requires the following quantities:
+\begin{enumerate}
+  \item Boundary illumination and any internal emissivity.
+  \item Absorption and scattering along the radiation paths.
+  \item The local angular mean $J_\nu$ obtained from the resulting intensities.
+  \item The photoionisation cross-section in
+    Equation~\eqref{eq:gamma_nu}.
+\end{enumerate}
+The same cross-section can contribute to opacity through
+$n_X\sigma_X$ and to the rate per atom through the integral over
+$J_\nu\sigma_X/(h\nu)$.
+\end{lesson}
+
+\section{Hydrogen attenuation and trapped radiation}
+A first approximation may retain only ground-state neutral
+hydrogen continuum absorption:
+\begin{equation}
+  \tau_\nu=\sigma_{\mathrm{H\,I}}(\nu)
+  \int n_{\mathrm{H}^0}\,d\ell.
+\end{equation}
+This continuum cross-section vanishes below the H ground-state
+ionisation threshold of approximately $13.6\,\mathrm{eV}$.
+Metal continua and spectral lines can still provide opacity
+at those photon energies.
+
+In particular, the ground-state H photoionisation cross-section
+does not describe resonant scattering in Ly$\alpha$. An incident
+Ly$\alpha$ component and locally produced, trapped Ly$\alpha$
+require a line-radiation prescription. Their effects on
+photoionisation depend on the thresholds of the absorbing states
+\cite{Laming2015}.
+
+Radiation below the hydrogen continuum threshold is relevant to
+low-FIP species. Improved C, Si and S atomic models can change the
+UV opacity and the resulting radiation field
+\cite{Dufresne2025}.
+
+\section{Boundary illumination and geometry}
+For a uniformly bright photospheric surface, immediately above
+that surface the upward hemisphere has
+\begin{equation}
+  F_{\nu,\mathrm{surf}}=\pi I_{\nu,\mathrm{surf}},
+  \qquad J_{\nu,\mathrm{ph}}=\frac{I_{\nu,\mathrm{surf}}}{2}.
+\end{equation}
+Under the same approximation, an irradiance measured at distance
+$d$ gives
+\begin{equation}
+  J_{\nu,\mathrm{ph}}
+  =\frac{F_{\nu,d}}{2\pi}
+   \left(\frac{d}{R_\odot}\right)^2.
+\end{equation}
+The factor $1/2$ averages a uniform intensity over an illuminated
+hemisphere. The assumptions include the adopted surface brightness
+and the near-surface geometry.
+
+Downward illumination from the corona requires its own source
+geometry. A disk-integrated outward irradiance does not uniquely
+specify the radiation received from the overlying corona.
+
+The loop coordinate $s$ follows the magnetic field. Radiation may
+travel across that field, so an opacity integral along $s$ represents
+a specified path approximation. Treating
+$J_\nu=J_{\nu,0}\exp(-\tau_\nu)$ as an attenuation law for the mean
+intensity similarly requires an effective angular prescription.
+A transfer solution evaluates the ray-dependent optical depths
+before averaging over directions.
+
+\setChapColor{Cap4Purple}{LightPurple}
+\chapter{A formulation for FIPpy}
+
+\section{Combining the two-stage rates}
+For the neutral--singly-ionised balance, define
+\begin{align}
+  R_{\mathrm{ion},X}
+    &=n_eC_X+\Gamma_X
+      +n_{\mathrm{H}^+}k_{\mathrm{cx,ion},X},
+      \label{eq:total_ion}\\
+  R_{\mathrm{rec},X}
+    &=n_e\alpha_X
+      +n_{\mathrm{H}^0}k_{\mathrm{cx,rec},X}.
+      \label{eq:total_rec}
+\end{align}
+Here $C_X$ describes ionisation out of $X^0$, while $\alpha_X$
+describes recombination out of $X^+$ into $X^0$. Each term on the
+right-hand sides has units of $\mathrm{s^{-1}}$.
+
+The statistical-equilibrium fraction is then
+\begin{equation}
+  \xi_X^{\mathrm{eq}}=
+  \frac{n_eC_X+\Gamma_X+
+        n_{\mathrm{H}^+}k_{\mathrm{cx,ion},X}}
+       {R_{\mathrm{ion},X}+R_{\mathrm{rec},X}}.
+  \label{eq:full_two_stage}
+\end{equation}
+Additional collision partners, including helium, can be introduced
+through their own populations and reaction coefficients.
+
+The relative importance of the ionisation channels can be
+diagnosed by comparing $n_eC_X$, $\Gamma_X$ and
+$n_{\mathrm{H}^+}k_{\mathrm{cx,ion},X}$ at each location.
+The final FIP sensitivity also depends on where these reactions
+change $\xi_X$ relative to the ponderomotive acceleration and
+collision rates.
+
+\section{What fiasco provides}
+Fiasco accesses CHIANTI atomic data and calculates electron-impact
+ionisation and electron recombination coefficients
+\cite{FiascoDocs,Dufresne2024}. For a neutral--singly-ionised
+calculation, the required quantities belong to adjacent ion objects.
+
+\begin{example}{Selecting the oxygen coefficients}
+The following code illustrates the stage selection. It requires
+fiasco and an available CHIANTI database.
+\begin{lstlisting}
+import astropy.units as u
+import numpy as np
+from fiasco import Ion
+
+# Illustrative grid; check the atomic fits' valid ranges.
+T = np.logspace(3.5, 6, 200) * u.K
+oxygen_neutral = Ion("O I", T)
+oxygen_ion = Ion("O II", T)
+
+# O I -> O II
+C_O = oxygen_neutral.ionization_rate
+
+# O II -> O I
+alpha_O = oxygen_ion.recombination_rate
+\end{lstlisting}
+Both quantities are coefficients with units of
+$\mathrm{cm^3\,s^{-1}}$. Multiplication by the local electron
+density gives their contributions to
+Equations~\eqref{eq:total_ion} and \eqref{eq:total_rec}.
+\end{example}
+
+For an Fe XVI object, the ionisation property describes
+Fe XVI to Fe XVII, and the recombination property describes
+Fe XVI to Fe XV. Plotting both is useful for examining the
+loss channels of Fe XVI, but those two curves do not form
+the forward and reverse rates of a single adjacent-stage pair.
+
+The usual temperature-dependent properties do not by themselves
+supply the local radiation field, photoionisation or H charge
+exchange. Support for a CHIANTI database version also does not
+establish that every advanced density-dependent process is
+included by those properties. CHIANTI v11 provides advanced
+models for selected elements; the applicable dataset and
+software treatment must be identified \cite{Dufresne2024}.
+
+\section{Several charge states}
+Let $I_q$ be the total rate for $q\rightarrow q+1$ and $A_q$
+the total rate for $q\rightarrow q-1$. For an adjacent-stage
+network following a parcel,
+\begin{equation}
+  \frac{df_q}{dt}
+  =I_{q-1}f_{q-1}+A_{q+1}f_{q+1}
+   -(I_q+A_q)f_q.
+  \label{eq:multistage}
+\end{equation}
+Terms outside the allowed charge range are absent, with
+$A_0=0$ and $I_{Z_X}=0$. This form assumes that the represented
+reactions change the charge by one.
+
+For a prescribed background, the same equations can be written
+\begin{equation}
+  \frac{d\boldsymbol f}{dt}=\boldsymbol R\boldsymbol f.
+\end{equation}
+Using column-vector populations, an off-diagonal entry $R_{ij}$
+is the rate from state $j$ to state $i$. Each diagonal entry
+is minus the sum of the rates leaving that state, so the
+columns of $\boldsymbol R$ sum to zero.
+
+Statistical equilibrium requires
+\begin{equation}
+  \boldsymbol R\boldsymbol f=0,\qquad \sum_q f_q=1.
+\end{equation}
+A level-resolved model uses the same construction with individual
+atomic levels as states. The neutral fraction is then the sum
+over all neutral levels.
+
+\section{Prescribed atmospheres and time dependence}
+On a prescribed HYDRAD atmosphere, $T_e$, $n_e$ and the hydrogen
+populations are supplied to the metal rate solver. This treats
+the metals as trace species for the background calculation.
+The resulting populations do not feed back on the saved
+temperature or electron density.
+
+A coupled calculation instead has to update the electron budget,
+energy balance and radiation consistently. Changing $n_e$
+while holding the rest of a saved atmosphere fixed introduces a
+different physical closure.
+
+For evolving atmospheres, Equation~\eqref{eq:multistage} retains
+the population history. Transport with a common flow speed $u$
+in a tube of cross-sectional area $\mathcal A$ can be written
+\begin{equation}
+  \frac{\partial(\mathcal A n_q)}{\partial t}
+  +\frac{\partial(\mathcal A u n_q)}{\partial s}
+  =\mathcal A\sum_jR_{qj}n_j.
+\end{equation}
+Initial populations, boundary inflows and sufficiently resolved
+atmospheric histories are required. Differential ion--neutral
+transport and the formation of an abundance anomaly require
+their own transport treatment.
+
+\section{Assumptions to record with each calculation}
+\begin{caution}
+Equations~\eqref{eq:total_ion}--\eqref{eq:full_two_stage} describe
+a two-stage, statistical-equilibrium model on a specified
+background. They omit higher charge stages unless the network
+is extended. A prescribed attenuated spectrum approximates the
+radiation field; it does not solve the full non-LTE transfer
+problem. Time dependence, density effects and excited-level
+populations enter only when their corresponding rates and
+equations are included.
+\end{caution}
+
+For each run, record the atomic-data version, reaction coverage
+and validity ranges. State the source of the H and He populations,
+the treatment of electron density, and the boundary radiation.
+Avoid applying a density-suppression correction to recombination
+coefficients that already contain that correction.
+
+The calculation should conserve the total population, return
+nonnegative fractions and satisfy the equilibrium residual when
+equilibrium is requested. Numerical checks should also include
+spectral-grid convergence and, for time-dependent runs, time-step
+and atmospheric-cadence convergence.
+
+A useful first implementation is the collisional rate matrix,
+followed by O--H charge exchange and photoionisation. Other
+elements then require their own verified reaction data.
+The resulting neutral fractions and FIP predictions can be
+compared with the existing Saha--CHIANTI prescription on the
+same atmosphere.
+
+\backmatter
+\setChapColor{Cap1Blue}{LightBlue}
+\begin{thebibliography}{99}
+\addcontentsline{toc}{chapter}{References}
+\bibitem{Laming2015}
+Laming, J. M. (2015).
+\textit{The FIP and Inverse FIP Effects in Solar and Stellar Coronae}.
+Living Reviews in Solar Physics, 12, 2.
+\url{https://doi.org/10.1007/lrsp-2015-2}.
+
+\bibitem{Laming2021}
+Laming, J. M. (2021).
+\textit{The FIP and Inverse-FIP Effects in Solar Flares}.
+\url{https://doi.org/10.3847/1538-4357/abd9c3}.
+
+\bibitem{CarlssonStein2002}
+Carlsson, M., and Stein, R. F. (2002).
+\textit{Dynamic Hydrogen Ionization}.
+\url{https://arxiv.org/abs/astro-ph/0202313}.
+
+\bibitem{Verner1996}
+Verner, D. A., Ferland, G. J., Korista, K. T., and Yakovlev, D. G.
+(1996).
+\textit{Atomic Data for Astrophysics. II. New Analytic Fits for
+Photoionization Cross Sections of Atoms and Ions}.
+\url{https://arxiv.org/abs/astro-ph/9601009}.
+
+\bibitem{Nikolic2018}
+Nikoli\'c, D., et al. (2018).
+\textit{Suppression of Dielectronic Recombination Due to Finite
+Density Effects II: Analytical Refinement and Application to
+Density-dependent Ionization Balances and AGN Broad-line Emission}.
+\url{https://arxiv.org/abs/1808.07365}.
+
+\bibitem{Dufresne2021}
+Dufresne, R. P., Del Zanna, G., and Badnell, N. R. (2021).
+\textit{The influence of photo-induced processes and charge transfer
+on carbon and oxygen in the lower solar atmosphere}.
+\url{https://arxiv.org/abs/2102.09278}.
+
+\bibitem{Dufresne2024}
+Dufresne, R. P., et al. (2024).
+\textit{CHIANTI: An Atomic Database for Emission Lines.
+Paper XVIII. Version 11, Advanced Ionization Equilibrium Models:
+Density and Charge Transfer Effects}.
+\url{https://arxiv.org/abs/2403.16922}.
+
+\bibitem{Dufresne2025}
+Dufresne, R. P., Del Zanna, G., and Osborne, C. M. J. (2025).
+\textit{Improving the atomic modelling for solar UV radiative
+transfer calculations}.
+\url{https://doi.org/10.1093/mnras/staf1330}.
+
+\bibitem{FiascoDocs}
+\textit{Fiasco documentation: Ion API and ionisation/recombination rates}.
+\url{https://fiasco.readthedocs.io/en/stable/api/fiasco.Ion.html}.
+\end{thebibliography}
+\end{document}
+

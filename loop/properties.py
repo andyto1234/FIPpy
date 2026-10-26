@@ -5,13 +5,36 @@ from scipy.interpolate import interp1d
 from loop.magnetic_field import MagneticField
 from maths.interpolater import NumbaInterpolator
 import os
+import warnings
+import numpy as np
 import pydrad.parse.parse
 from scipy.interpolate import PchipInterpolator
 
 class LoopProperties:
-    def __init__(self, input_file):
-        self.s_array, self.ne_interp, self.nh_interp, self.rho_interp, self.T_interp, self.h_ionisation_interp, self.pe_interp, self.sound_speed_interp, self.velocity_interp = self.get_loop_properties(input_file)
+    def __init__(self, input_file, *, hydrogen_fraction=None, hydrogen_metadata=None):
+        if hydrogen_fraction is None:
+            hydrogen_fraction, inferred = self.hydrogen_from_profile(input_file)
+            hydrogen_metadata = hydrogen_metadata or inferred
+        elif hydrogen_metadata is None:
+            hydrogen_metadata = {'source': 'explicit hydrogen_fraction override'}
+        self.hydrogen_metadata = hydrogen_metadata
+        self.s_array, self.ne_interp, self.nh_interp, self.rho_interp, self.T_interp, self.h_ionisation_interp, self.pe_interp, self.sound_speed_interp, self.velocity_interp = self.get_loop_properties(input_file, hydrogen_fraction)
         self.magnetic_field = MagneticField(self)
+
+    @classmethod
+    def from_hydrad(cls, profile, root, profile_index, hydrogen_history=None):
+        """Use saved H II, a supplied cache, or the fully ionised closure when ne = nH."""
+        if hydrogen_history is None:
+            return cls(profile)
+        from hydrogen import HydrogenHistory
+        history = (HydrogenHistory.load(hydrogen_history)
+                   if isinstance(hydrogen_history, (str, os.PathLike)) else hydrogen_history)
+        if not isinstance(history, HydrogenHistory):
+            raise TypeError('hydrogen_history must be a HydrogenHistory or cache path')
+        fraction = history.fraction(profile_index, profile.coordinate.to_value(u.cm),
+                                    root=root, time=profile.time.to_value(u.s))
+        return cls(profile, hydrogen_fraction=fraction,
+                   hydrogen_metadata={'source': 'reconstruction', **history.metadata})
 
     @staticmethod
     def calculate_density(number_density):
@@ -33,21 +56,68 @@ class LoopProperties:
         return self.magnetic_field(s)
 
     @staticmethod
-    def get_loop_properties(input_file):
-        if type(input_file) == pydrad.parse.parse.Profile:
+    def _profile_attr(profile, new_name, old_name):
+        # pydrad >= 0.2.dev19 renamed ion_* to hydrogen_* and level_population_hydrogen_6 to hydrogen_II_fraction
+        try:
+            return getattr(profile, new_name)
+        except AttributeError:
+            return getattr(profile, old_name)
+
+    @staticmethod
+    def hydrogen_from_profile(profile):
+        """Saved H II if present. Otherwise fully ionised hydrogen when ne = nH.
+
+        The second case is the quasi-neutral closure of a fully ionised HYDRAD run
+        (Bradshaw & Cargill 2013). It is not an LTE chromosphere.
+        """
+        try:
+            fraction = np.asarray(LoopProperties._profile_attr(
+                profile, 'hydrogen_II_fraction', 'level_population_hydrogen_6').value, dtype=float)
+        except (ValueError, AttributeError, TypeError):
+            fraction = None
+        if fraction is not None and fraction.dtype.kind in 'fc':
+            return fraction, {'source': 'HYDRAD level_population_hydrogen_6'}
+        ne = np.asarray(profile.electron_density.to_value(u.cm**-3), dtype=float)
+        nh = np.asarray(LoopProperties._profile_attr(
+            profile, 'hydrogen_density', 'ion_density').to_value(u.cm**-3), dtype=float)
+        if ne.shape != profile.coordinate.shape or not np.allclose(ne, nh, rtol=1e-5, atol=0.0):
+            raise ValueError(
+                'No hydrogen populations available, and ne differs from nH, so the '
+                'quasi-neutral fully ionised closure does not apply. Supply hydrogen_history.'
+            )
+        warnings.warn(
+            'No hydrogen populations in this HYDRAD profile. Using fully ionised '
+            'hydrogen because ne = nH (Bradshaw & Cargill 2013).',
+            UserWarning,
+            stacklevel=2,
+        )
+        return np.ones(ne.shape, dtype=float), {
+            'source': 'quasi-neutral',
+            'assumption': 'fully ionised hydrogen, ne = nH',
+            'reference': 'Bradshaw & Cargill 2013, ApJ, 770, 12',
+        }
+
+    @staticmethod
+    def get_loop_properties(input_file, hydrogen_fraction):
+        if isinstance(input_file, pydrad.parse.parse.Profile):
             print('Loading from pydrad profile')
-            h_ionisation = 1-input_file.level_population_hydrogen_1.value
+            h_ionisation = np.asarray(hydrogen_fraction, dtype=float)
+            if (h_ionisation.shape != input_file.coordinate.shape
+                    or not np.all(np.isfinite(h_ionisation))
+                    or np.any((h_ionisation < 0) | (h_ionisation > 1))):
+                raise ValueError('Hydrogen fraction must match the profile grid and lie in [0, 1]')
             ne_array = input_file.electron_density.to(u.cm**-3)
-            nh_array = input_file.ion_density.to(u.cm**-3)
-            T_array = input_file.ion_temperature.to(u.MK)
+            get = LoopProperties._profile_attr
+            nh_array = get(input_file, 'hydrogen_density', 'ion_density').to(u.cm**-3)
+            T_array = get(input_file, 'hydrogen_temperature', 'ion_temperature').to(u.MK)
             s_array = input_file.coordinate.to(u.cm)
-            pe_array = input_file.ion_pressure.to(u.dyne/u.cm**2)
+            pe_array = get(input_file, 'hydrogen_pressure', 'ion_pressure').to(u.dyne/u.cm**2)
             sound_speed_array = input_file.sound_speed.to(u.cm/u.s)
             velocity_array = input_file.velocity.to(u.cm/u.s)
             # import pdb; pdb.set_trace()
             
         else:
-            print('file type not compatible ')
+            raise TypeError('LoopProperties requires a pydrad Profile')
 
 
         # Extract necessary variables
@@ -105,7 +175,10 @@ class LoopProperties:
         return self.pe_interp(s) * u.dyne/u.cm**2
     
     def h_ionisation(self, s):
-        return self.h_ionisation_interp(s)
+        s_cm = s.to_value(u.cm) if isinstance(s, u.Quantity) else np.asarray(s)
+        # Hold the end-cell values outside the centers; extrapolating fractions
+        # can otherwise produce negative neutral/proton collision rates.
+        return self.h_ionisation_interp(np.clip(s_cm, self.s_array[0].to_value(u.cm), self.s_array[-1].to_value(u.cm)))
 
     def P(self, s):
         n_e_s = self.ne(s)

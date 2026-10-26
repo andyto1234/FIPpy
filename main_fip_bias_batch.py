@@ -1,10 +1,23 @@
 import pickle
+import sys
+from pathlib import Path
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 import io
 import os
 from matplotlib import ticker
+
+# Notebook kernels often append this repo after the standard library, so
+# "wave" binds to the stdlib WAV module. Search this repo first.
+_ROOT = str(Path(__file__).resolve().parent)
+if _ROOT in sys.path:
+    sys.path.remove(_ROOT)
+sys.path.insert(0, _ROOT)
+_loaded_wave = sys.modules.get("wave")
+if _loaded_wave is not None and not hasattr(_loaded_wave, "__path__"):
+    del sys.modules["wave"]
+
 from loop.properties import LoopProperties
 from loop.reader import HydradReader
 from physics.saha import get_ionisation_fraction
@@ -44,35 +57,26 @@ def plot_ionization(results):
     
     return buf.getvalue()
 
-def extract_directory_name(directory_path):
-    name = directory_path.split('/')[-1]
-    return name
-
 def setup_output_directory(output_dir, frequency, amplitude, flux_value=None, v_add=None):
-    directory_name = extract_directory_name(output_dir)
-    
-    # Include flux in directory name if provided
+    run_name = f'v_{frequency.value:.4f}_A_{amplitude.value:.2f}'
     if flux_value is not None:
-        flux_str = f'F_{flux_value.value:.1e}'.replace('+', '')
-        output_dir = f'/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/{directory_name}/v_{frequency.value:.4f}_A_{amplitude.value:.2f}_{flux_str}/'
+        run_name += '_' + f'F_{flux_value.value:.1e}'.replace('+', '')
     elif v_add is not None:
-        v_add_str = f'v_add_{v_add.value:.2f}'.replace('+', '')
-        output_dir = f'/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/{directory_name}/v_{frequency.value:.4f}_A_{amplitude.value:.2f}_{v_add_str}/'
-    else:
-        output_dir = f'/Users/andysh.to/Script/Python_Script/alfven_loop_SM/results/{directory_name}/v_{frequency.value:.4f}_A_{amplitude.value:.2f}/'
-    
-    image_dir = output_dir + 'images/'
+        run_name += '_' + f'v_add_{v_add.value:.2f}'.replace('+', '')
+
+    output_dir = os.path.join(os.path.abspath(output_dir), run_name) + os.sep
+    image_dir = os.path.join(output_dir, 'images') + os.sep
     for directory in [output_dir, image_dir]:
         os.makedirs(directory, exist_ok=True)
     return output_dir, image_dir
     
-def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num=105, acoustic_flux=None, v_add=None):
+def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num=105, acoustic_flux=None, v_add=None, *, hydrogen_history=None):
     # Load data from input pickle file
     output_dir, image_dir = setup_output_directory(output_dir, frequency, amplitude, flux_value=acoustic_flux, v_add=v_add)
 
     hydrad_strand = HydradReader(input_file, strand_num=strand_num).read_strand()
     # print(type(hydrad_strand))
-    loop_properties = LoopProperties(hydrad_strand)
+    loop_properties = LoopProperties.from_hydrad(hydrad_strand, input_file, strand_num, hydrogen_history)
 
     analyzer = WaveAnalyzer(loop_properties)
     sol = analyzer.solve_wave_equations(amplitude, frequency)
@@ -486,6 +490,7 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
         'ne': loop_properties.ne(s_values),
         'nh': loop_properties.nh(s_values),
         'h_ionisation': loop_properties.h_ionisation(s_values),
+        'hydrogen_metadata': loop_properties.hydrogen_metadata,
         'T': loop_properties.T(s_values),
         'thermal_speed_squared': thermal_speed_squared_dict,
         'B': B_s,
@@ -503,6 +508,7 @@ def process_hydrad_data(input_file, frequency, amplitude, output_dir, strand_num
         
         # Ionization fractions for each element
         'ionization_fractions': ionization_fractions,
+        'ionisation_model': 'Saha–CHIANTI 11.0.2 hybrid (CIE table 1e3–1e9 K)',
         
         # Collision frequencies for each element (if available)
         'collision_frequencies': collision_frequencies,

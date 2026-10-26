@@ -1,0 +1,106 @@
+[
+  {
+    "file": "Dufresne_2024_CHIANTI_v11.pdf",
+    "url": "https://arxiv.org/pdf/2403.16922",
+    "sha256": "3b3e1fc00db7e851bd95fcdced7abaea36d6e521cbbeae6e9886fadfae6021bf",
+    "pages": 19,
+    "title_excerpt": "Draft version March 26, 2024\nTypeset using LATEX twocolumn style in AASTeX631\nCHIANTI \u2013 an atomic database for emission lines - Paper XVIII. Version 11, advanced ionization\nequilibrium models: density and charge transfer effects.\nR. P. Dufresne\n ,1 G",
+    "status": "downloaded",
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Dufresne_2025_UV_radiative_transfer.pdf",
+    "url": "https://arxiv.org/pdf/2508.06422",
+    "sha256": "91f150680215d1dde3d0e057eb3bd0e22d1383f2e6913aa67f9dc08764ca8d73",
+    "pages": 15,
+    "title_excerpt": "MNRAS000, 1\u201315 (2025) Preprint 11 August 2025 Compiled using MNRAS L ATEX style file v3.0\nImproving the atomic modelling for solar UV radiative transfer\ncalculations\nR.P. Dufresne,1\u2605 G. Del Zanna,1,2 and C.M.J. Osborne3\n1DAMTP , University of Cambrid",
+    "status": "downloaded",
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Dufresne_2021_C_O_photoionisation_charge_transfer.pdf",
+    "url": "https://arxiv.org/pdf/2102.09278",
+    "status": "downloaded",
+    "sha256": "0edc8597f58620758ebefb3915ce9b7283407df7eaa8b80803aa7030b00ea9e2",
+    "pages": 12,
+    "title_excerpt": "arXiv:2102.09278v1  [astro-ph.SR]  18 Feb 2021\nMNRAS 000, 1\u201312 (2020) Preprint 19 February 2021 Compiled using MNRAS L ATEX style \ufb01le v3.0\nThe in\ufb02uence of photo-induced processes and charge transfe r on carbon\nand oxygen in the lower solar atmosphere",
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Carlsson_Stein_2002_Dynamic_Hydrogen.pdf",
+    "url": "https://arxiv.org/pdf/astro-ph/0202313",
+    "sha256": "1a8f36144045fa0aa8cb8b28c854eeee2dd347453bd337318903a436a387323b",
+    "pages": 28,
+    "title_excerpt": "arXiv:astro-ph/0202313v1  16 Feb 2002\nDynamic Hydrogen Ionization\nMats Carlsson\nInstitute of Theoretical Astrophysics, University of Oslo , P.O. Box 1029 Blindern, N-0315\nOslo, Norway\nMats.Carlsson@astro.uio.no\nand\nR. F. Stein\nDept. of Physics and As",
+    "status": "downloaded",
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Nikolic_2018_DR_suppression.pdf",
+    "url": "https://arxiv.org/pdf/1808.07365",
+    "sha256": "d21356bad02a1e752df78a368a9d950168fc189bce33a771eea8c3b342373241",
+    "pages": 27,
+    "title_excerpt": "Draft version March 23, 2022\nTypeset using LATEX manuscript style in AASTeX62\nSuppression of Dielectronic Recombination Due to Finite Density E\ufb00ects II: Analytical Re\ufb01nement\nand Application to Density-dependent Ionization Balances and AGN Broad-line ",
+    "status": "downloaded",
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Verner_1996_Photoionisation.pdf",
+    "url": "https://arxiv.org/pdf/astro-ph/9601009",
+    "sha256": "f493c884f2c1c7d19a54b0f6df52952bef660d771718c98523b16da339e242e6",
+    "pages": 24,
+    "title_excerpt": "arXiv:astro-ph/9601009v2  16 Jan 1996\nAtomic Data for Astrophysics. II. New Analytic Fits for Phot oionization Cross\nSections of Atoms and Ions\nD. A. Verner 1, G. J. Ferland, and K. T. Korista\nDepartment of Physics and Astronomy, University of Kentuc",
+    "status": "downloaded",
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Osborne_Milic_2021_Lightweaver.pdf",
+    "url": "https://arxiv.org/pdf/2107.00475",
+    "sha256": "b081cdba6369dd4a3b34d37e1b47d4fee484e1f590527c93d212b097f11c8d29",
+    "pages": 24,
+    "title_excerpt": "Draft version July 2, 2021\nTypeset using LATEX twocolumn style in AASTeX631\nThe Lightweaver F ramework for NL TE Radiative T ransfer in Python\nChristopher M. J. Osborne\n 1 and Ivan Mili\u00b4c2, 3, 4\n1SUPA School of Physics and Astronomy,\nUniversity of Gl",
+    "status": "downloaded",
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Golding_2016_NE_Helium.pdf",
+    "url": "https://arxiv.org/pdf/1512.04738",
+    "sha256": "dba713fdef8f892bf3d60c58270cee7587517a0bed02a2089afe6c6f31c6f20d",
+    "pages": 14,
+    "title_excerpt": "Draft version June 26, 2021\nPreprint typeset using L ATEX style emulateapj v. 5/2/11\nNON-EQUILIBRIUM HELIUM IONIZATION IN AN MHD SIMULATION OF THE SOLAR ATMOSPHERE\nThomas Peter Golding\nInstitute of Theoretical Astrophysics, University of Oslo, P.O. B",
+    "status": "downloaded",
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Laming_2012_ApJ.pdf",
+    "source_path": "/Volumes/Crucial X9/Research/Laming_2012_ApJ.pdf",
+    "status": "copied",
+    "sha256": "cf4f039023e56d5ab1d4194831f2a9020578b92e60c718f3a78cc86f442cc85a",
+    "pages": 13,
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Laming_2015_LivingRev.pdf",
+    "source_path": "/Volumes/Crucial X9/Research/Laming_2015_LivingRev.pdf",
+    "status": "copied",
+    "sha256": "647eeba8903c80f3decc9b6f84aab7738f6a89d48cf47621655f078aca5481f5",
+    "pages": 76,
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Laming_2019_ApJ.pdf",
+    "source_path": "/Volumes/Crucial X9/Research/Laming_2019_ApJ.pdf",
+    "status": "copied",
+    "sha256": "1603d8bcc9e86422f1c60c3b5bd01fa6556cf8c6cfb7174d15286346fad0185b",
+    "pages": 16,
+    "retrieved_date": "2026-10-20"
+  },
+  {
+    "file": "Laming_2021_ApJ.pdf",
+    "source_path": "/Volumes/Crucial X9/Research/Laming_2021_ApJ.pdf",
+    "status": "copied",
+    "sha256": "47db4bf9ddabcb270bfef981485bf1ccfb502bdc5f223c3dce00a91948c36904",
+    "pages": 10,
+    "retrieved_date": "2026-10-20"
+  }
+]
