@@ -171,20 +171,22 @@ optimise_vadd.py    Parameter-study scripts used in the paper workflow
 If you use FIPpy or the methods in the paper, please cite:
 
 ```bibtex
-@ARTICLE{To2026arXiv260413174T,
+@ARTICLE{To2026RSPTA.38450374T,
        author = {{To}, Andy S.~H. and {Laming}, J. Martin and {Reep}, Jeffrey and {Finley}, Adam J.},
         title = "{Chromospheric dynamics and turbulence regulate the solar FIP effect}",
-      journal = {arXiv e-prints},
-     keywords = {Solar and Stellar Astrophysics, Space Physics},
+      journal = {Philosophical Transactions of the Royal Society of London Series A},
+     keywords = {solar corona, active region, elemental abundance, FIP bias, HYDRAD, Solar and Stellar Astrophysics, Space Physics},
          year = 2026,
-        month = apr,
-          eid = {arXiv:2604.13174},
-        pages = {arXiv:2604.13174},
-          doi = {10.48550/arXiv.2604.13174},
+        month = jul,
+       volume = {384},
+       number = {2323},
+          eid = {20250374},
+        pages = {20250374},
+          doi = {10.1098/rsta.2025.0374},
 archivePrefix = {arXiv},
        eprint = {2604.13174},
  primaryClass = {astro-ph.SR},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2026arXiv260413174T},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026RSPTA.38450374T},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
 ```
