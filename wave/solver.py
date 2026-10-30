@@ -2,9 +2,7 @@ from scipy.integrate import solve_ivp
 # from physics.constants import u
 import astropy.units as u
 from loop.magnetic_field import MagneticField
-from loop.heights import ScaleHeightCalculator
 from physics.speed import AlfvenSpeedCalculator
-from plasmapy.formulary import beta
 import numpy as np
 # from line_profiler import profile
 from .slowmode import solve_dvz
@@ -18,8 +16,6 @@ class WaveAnalyzer:
         # self.omega = self.frequency_to_angular_frequency(self.frequency)
         self.B = MagneticField(loop_properties)
         self.alfven_speed_calculator = AlfvenSpeedCalculator(self.B, self.loop_properties.rho)
-        self.density_scale_height_calculator = ScaleHeightCalculator(self.loop_properties.rho)
-        self.alfven_scale_height_calculator = ScaleHeightCalculator(self.alfven_speed_calculator.calculate)
 
     @staticmethod
     def frequency_to_angular_frequency(frequency):
@@ -29,13 +25,35 @@ class WaveAnalyzer:
         """Calculate Alfvén speed at position s."""
         return AlfvenSpeedCalculator(self.B, self.loop_properties.rho).calculate(s)
 
+    def _log_slopes(self, s):
+        """Return d ln rho/ds and d ln VA/ds, in 1/cm.
+
+        The density slope is the derivative of the PCHIP interpolant the rest
+        of the solver evaluates. The Alfvén-speed slope follows from
+        VA = B/sqrt(4 pi rho), so it is d ln B/ds - (1/2) d ln rho/ds.
+        """
+        s_cm = s.to_value(u.cm) if isinstance(s, u.Quantity) else np.asarray(s, dtype=float)
+        rho = np.asarray(self.loop_properties.rho_interp(s_cm), dtype=float)
+        density_slope = np.asarray(self.loop_properties.rho_interp.derivative()(s_cm), dtype=float) / rho
+        alfven_slope = self.B.logarithmic_derivative(s_cm) - 0.5 * density_slope
+        return density_slope, alfven_slope
+
+    @staticmethod
+    def _height_from_slope(slope):
+        slope = np.asarray(slope, dtype=float)
+        with np.errstate(divide="ignore"):
+            height = np.where(slope != 0, 1.0 / slope, np.inf)
+        return height * u.cm
+
     def HD(self, s):
-        """Calculate density scale height at position s."""
-        return self.density_scale_height_calculator.calculate(s)
+        """Density scale height from the interpolant actually used for rho(s)."""
+        density_slope, _ = self._log_slopes(s)
+        return self._height_from_slope(density_slope)
 
     def HA(self, s):
-        """Calculate Alfvén scale height at position s."""
-        return self.alfven_scale_height_calculator.calculate(s)
+        """Alfvén scale height required by VA = B/sqrt(4 pi rho)."""
+        _, alfven_slope = self._log_slopes(s)
+        return self._height_from_slope(alfven_slope)
 
     def solve_slow_mode_dvz(self, s, w_A, dv_A):
         """
@@ -219,33 +237,31 @@ class WaveAnalyzer:
 
     # @profile
     def _solve_ode(self, s_eval, y0, omega):
-        """Internal method to solve the ODE system."""
+        """Integrate the wave ODE across the continuous prescribed field."""
         def ode_system(s, y):
             """Define the ODE system for wave propagation."""
-            
-            V_A_s, H_D_s, H_A_s, u_s, _s = self._ode_feeder(s)  # Now returns u_s to use actual background flow
-
+            V_A_s, H_D_s, H_A_s, u_s, _s = self._ode_feeder(s)
             return ode_system_numba(s, y, V_A_s, H_D_s, H_A_s, u_s, omega)
-        
+
         return solve_ivp(
             ode_system,
-            [s_eval[0], s_eval[-1]],
+            [float(s_eval[0]), float(s_eval[-1])],
             y0,
-            dense_output=True,  # Add this
+            dense_output=True,
             method='LSODA',
             atol=1e-5,
             rtol=1e-5,
-            max_step=np.inf  # Let it choose steps freely
+            max_step=np.inf,
+        )
 
-        )    # Define ODE system
     def _ode_feeder(self, s):
         # Convert input s to astropy quantity for safety
         s_cgs = s * u.cm
         # Get values with units then extract numeric values
-        V_A_s = self.VA(s_cgs).to(u.cm/u.s).value # Alfven speed
-        H_D_s = self.HD(s_cgs).to(u.cm).value # density scale height
-        H_A_s = self.HA(s_cgs).to(u.cm).value # Alfven speed scale height
-        u_s = self.loop_properties.velocity(s_cgs).to(u.cm/u.s).value # Background flow velocity
+        V_A_s = float(self.VA(s_cgs).to_value(u.cm/u.s))
+        H_D_s = float(self.HD(s_cgs).to_value(u.cm))
+        H_A_s = float(self.HA(s_cgs).to_value(u.cm))
+        u_s = float(np.asarray(self.loop_properties.velocity(s_cgs).to_value(u.cm/u.s)))
         return V_A_s, H_D_s, H_A_s, u_s, s
     
 from numba import njit
@@ -299,3 +315,4 @@ def _solve_ode_reversed(self, s_eval, y0, omega):
     """Solve ODE in reverse direction (for left side of apex)."""
     # Modify signs appropriately for reversed integration
     # ... similar to _solve_ode but handle direction
+

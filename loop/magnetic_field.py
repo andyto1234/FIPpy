@@ -2,9 +2,50 @@ import numpy as np
 import astropy.units as u
 
 class MagneticField:
+    # Footpoint polynomial in Gauss for s in centimetres, joined to a constant
+    # corona. The raw polynomial is 107.89 G at 3 Mm, 1.99 G above the coronal
+    # value. That mismatch is removed by a constant shift so B is continuous
+    # and the corona stays 105.9 G. The derivative of a constant is zero, so
+    # the footpoint shape of dB/ds is unchanged.
+    _FOOTPOINT_POLYNOMIAL = np.polynomial.Polynomial(
+        [1031.61, -1.33014e-5, 8.48378e-14, -3.03276e-22, 5.88384e-31, -4.7167e-40]
+    )
+    _FOOTPOINT_DEPTH = 3e8  # cm
+    _CORONAL_FIELD = 105.9  # G
+    _FOOTPOINT_OFFSET = float(
+        _FOOTPOINT_POLYNOMIAL(_FOOTPOINT_DEPTH) - _CORONAL_FIELD
+    )
+
     def __init__(self, loop_properties):
         self.loop_properties = loop_properties
         self._precompute_tr_weight()
+
+    def magnetic_joins(self):
+        """Positions [cm] where the footpoint polynomial meets the corona."""
+        length = self.loop_properties.loop_length.to(u.cm).value
+        depth = self._FOOTPOINT_DEPTH
+        return (depth, length - depth)
+
+    def logarithmic_derivative(self, s_cm):
+        """d ln B/ds on each smooth piece. s_cm is in centimetres."""
+        s = np.asarray(s_cm, dtype=float)
+        scalar = s.ndim == 0
+        s = np.atleast_1d(s)
+        length = self.loop_properties.loop_length.to(u.cm).value
+        depth = self._FOOTPOINT_DEPTH
+        polynomial = self._FOOTPOINT_POLYNOMIAL
+        slope = polynomial.deriv()
+        offset = self._FOOTPOINT_OFFSET
+        deriv = np.zeros(s.shape)
+        left = s < depth
+        right = s > length - depth
+        if np.any(left):
+            x = s[left]
+            deriv[left] = slope(x) / (polynomial(x) - offset)
+        if np.any(right):
+            x = length - s[right]
+            deriv[right] = -slope(x) / (polynomial(x) - offset)
+        return deriv[0] if scalar else deriv
 
     def __call__(self, s):
         """Calculate magnetic field strength at position s."""
@@ -23,15 +64,15 @@ class MagneticField:
         # )
 
         
-        def calculate_field(x):
-            return 1031.61 - 1.33014e-5 * x + 8.48378e-14 * x**2 - 3.03276e-22 * x**3 + 5.88384e-31 * x**4 - 4.7167e-40 * x**5
-
-            # Use numpy.where to handle array inputs
-        B_s = np.where(s_cm < 3e8, 
-                    calculate_field(s_cm),
-                    np.where(s_cm > loop_length.to(u.cm).value - 3e8,
-                            calculate_field(loop_length.to(u.cm).value - s_cm),
-                            105.9))
+        depth = self._FOOTPOINT_DEPTH
+        polynomial = self._FOOTPOINT_POLYNOMIAL
+        length = loop_length.to(u.cm).value
+        offset = self._FOOTPOINT_OFFSET
+        B_s = np.where(s_cm < depth,
+                    polynomial(s_cm) - offset,
+                    np.where(s_cm > length - depth,
+                            polynomial(length - s_cm) - offset,
+                            self._CORONAL_FIELD))
                             # 7.9))
 
         return B_s * u.G # artificially decrease the magnetic field strength
